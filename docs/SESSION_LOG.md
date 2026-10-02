@@ -4,7 +4,96 @@
 
 ---
 
-# Current Checkpoint — 2026-10-02
+# Current Checkpoint — 2026-10-02 · PART 1 COMPLETE
+
+**Status:** 🟢 Part 1 (Repository Audit + Secure Foundation) implemented and tested  
+**Project:** SafeFlux — Autonomous Process-Safety Failure Hunter  
+**Track:** Best Apps & Agents
+
+## Repository audit (before any code)
+
+- `docs/` contained the three canonical files; no source code existed yet.
+- Git history: 5 documentation-only commits; no code, no tests, no README/LICENSE.
+- `.gitignore` was already comprehensive (env files, keys, venvs, dist, db, logs).
+- Secret scan of full history: no credentials found. No rotation required.
+
+## What is complete (Part 1)
+
+### Backend (`Backend/`)
+
+- FastAPI app factory (`app/main.py`) with `/api/v1` router, `GET /health`, root probe.
+- Settings layer (`app/core/config.py`): typed pydantic-settings validation,
+  `SecretStr` wrapping, production constraints (DEBUG forbidden, JWT_SECRET ≥ 32 chars),
+  fail-fast startup that reports variable **names only**.
+- Consistent envelope helpers (`app/core/responses.py`) and global exception handlers
+  (`app/core/errors.py`): safe messages, sanitized validation details, no stack traces.
+- Security middleware (`app/core/security.py`): security headers, HSTS in production
+  only, catch-all conversion of unhandled exceptions to safe 500s, strict CORS allowlist
+  derived from `FRONTEND_URL` (credentials allowed, never `*`).
+- Rate limiting (`app/core/rate_limit.py`): in-memory fixed window per client IP,
+  health endpoint exempt, bounded memory.
+- `Backend/.env.example` (no secrets), pinned `requirements.txt`.
+
+### Frontend (`frontend/`)
+
+- Vite + React 19 + TypeScript (strict) + Tailwind v4, oxlint clean.
+- Axios client unwrapping the `{success,data}` envelope and normalizing failures to
+  `ApiError` with safe messages; TanStack Query wiring.
+- Public layout (landing/login/signup) and one-viewport authenticated workspace shell
+  (`AppLayout`: fixed header/sidebar, internal content scroll, mobile top nav).
+- Fail-closed `AuthProvider` + `ProtectedRoute` — no session ⇒ locked routes.
+- Routes match `ARCHITECTURE.md` §4; placeholder pages mark which part unlocks them.
+- Signup is a 2-step wizard (one-viewport form rule); loading/error foundations
+  (`ErrorBoundary`, `LoadingFallback`, `ErrorPanel`).
+- `frontend/.env.example` (public config only).
+
+### Docs
+
+- `README.md` (real setup instructions), `LICENSE` (MIT) added;
+  this checkpoint written; ARCHITECTURE status line updated.
+- `SAFEFLUX_MASTER.md` untouched — no product requirement changed.
+
+## Tests run
+
+- Backend: `python -m pytest` → **28 passed** (health, envelope contract, 404/405/422/500
+  safety, security headers, HSTS prod-only, docs lockdown in production, CORS allow/deny,
+  rate limit + window recovery, config validation, secret-safe failure messages).
+- Frontend: `npm run lint` → 0 warnings/errors; `npm run build` (tsc strict + vite) green.
+- Live smoke: backend on :8000, frontend on :5173 — health envelope ✅, CORS allow ✅,
+  CORS deny (no ACAO) ✅, headers ✅, safe 404/500 ✅, bad config fails with field names ✅.
+- Browser verified: landing API badge reads “API online · v0.1.0 · development”,
+  `/dashboard` redirects to `/login`, login submit surfaces the backend’s safe error
+  envelope in the UI.
+
+## Security audit (Part 1 rules 1–25)
+
+- No secrets committed; only `.env.example` files tracked; `git check-ignore` confirms
+  `.env`, `.venv`, `node_modules`, `dist`, `*.db` are excluded.
+- Production bundle scanned: no API keys/JWT/NEBIUS material (only the public
+  `VITE_API_BASE_URL` fallback). Rule 22: no new external API integrated in Part 1 —
+  Nebius vars exist in `.env.example` but are unused until Part 8.
+- Dependency review: backend 6 pinned direct deps (all used); frontend deps limited to
+  the locked stack + Tailwind; template leftovers removed (App.css, stock assets/README).
+- Known limitation: rate-limit state is per-process memory (fine for the MVP; revisit
+  if multi-worker deployment is added).
+
+## Decisions
+
+1. Session check fails **closed**: `/auth/session` 404 (Part 2 endpoint) → unauthenticated.
+2. FastAPI `debug` is always `False`; `DEBUG` only controls log verbosity.
+3. `/docs` and `/openapi.json` are disabled in production.
+4. Validation errors return sanitized `details[]` (field + message) without echoing
+   submitted values.
+5. Backend `.env` files are never created in the repo; local runs pass env vars directly.
+
+## Next action
+
+Part 2 — Authentication + Authorization: Argon2/bcrypt hashing, HttpOnly cookie sessions,
+`get_current_user()`, ownership-scoped resources, IDOR/cross-user tests, auth rate limits.
+
+---
+
+# Checkpoint — 2026-10-02 (documentation restored)
 
 **Status:** 🟡 Documentation restored; ready for a pre-implementation Duck audit  
 **Project:** SafeFlux — Autonomous Process-Safety Failure Hunter  

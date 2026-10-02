@@ -1,6 +1,6 @@
 # SafeFlux — Architecture
 
-**Status:** Architecture baseline for 10-part implementation  
+**Status:** Architecture baseline; Part 1 (secure foundation) implemented  
 **Last updated:** 2026-10-02
 
 ---
@@ -299,6 +299,10 @@ Rate-limit at minimum:
 - other expensive endpoints where needed
 
 Also enforce hard request budgets.
+
+Implemented in Part 1: in-memory fixed-window limiter per client IP over `/api/v1/*`
+(`app/core/rate_limit.py`), health probe exempt, configured via `RATE_LIMIT_REQUESTS` /
+`RATE_LIMIT_WINDOW_SECONDS`. Endpoint-specific budgets arrive with their features.
 
 ---
 
