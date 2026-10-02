@@ -51,6 +51,14 @@ _HTTP_ERROR_MESSAGES: dict[int, str] = {
 
 _MAX_SAFE_DETAIL_LENGTH = 300
 
+# Starlette's auto-generated details — replaced with friendlier curated text.
+_AUTO_DETAILS = {
+    "Not Found",
+    "Method Not Allowed",
+    "Unauthorized",
+    "Forbidden",
+}
+
 
 def _sanitize(message: str, limit: int = _MAX_SAFE_DETAIL_LENGTH) -> str:
     """Single-line, length-capped message safe to return to clients."""
@@ -62,8 +70,13 @@ def _http_status_payload(status_code: int, detail: object) -> dict:
     message = _HTTP_ERROR_MESSAGES.get(status_code, "The request could not be processed.")
 
     # 4xx details are written by our own code and are safe to surface;
-    # 5xx details are never surfaced.
-    if status_code < 500 and isinstance(detail, str) and detail:
+    # 5xx details and framework auto-details are never surfaced.
+    if (
+        status_code < 500
+        and isinstance(detail, str)
+        and detail
+        and detail not in _AUTO_DETAILS
+    ):
         message = _sanitize(detail)
 
     return error_payload(code, message)
