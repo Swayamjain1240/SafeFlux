@@ -43,6 +43,10 @@
   (`AppLayout`: fixed header/sidebar, internal content scroll, mobile top nav).
 - Fail-closed `AuthProvider` + `ProtectedRoute` — no session ⇒ locked routes.
 - Routes match `ARCHITECTURE.md` §4; placeholder pages mark which part unlocks them.
+- Landing is a **single-viewport marketing screen**: hero + switchable tab panels
+  (investigation loop / boundary hunting / guardrails) instead of a scrolling page.
+  `PublicLayout` keeps the document itself from scrolling; overflow lives only inside
+  the tab panel region (nothing clipped). Verified at 1440×900, 834×1112 and 390×844.
 - Signup is a 2-step wizard (one-viewport form rule); loading/error foundations
   (`ErrorBoundary`, `LoadingFallback`, `ErrorPanel`).
 - `frontend/.env.example` (public config only).

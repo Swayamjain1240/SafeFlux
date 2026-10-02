@@ -59,7 +59,7 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-4 py-10">
+    <div className="flex h-full items-center justify-center px-4 py-6">
       <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-xl">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-semibold text-white">Create account</h1>

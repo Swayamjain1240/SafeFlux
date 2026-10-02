@@ -40,7 +40,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-4 py-10">
+    <div className="flex h-full items-center justify-center px-4 py-6">
       <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-xl">
         <h1 className="text-lg font-semibold text-white">Welcome back</h1>
         <p className="mt-1 text-xs text-slate-500">
