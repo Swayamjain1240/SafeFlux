@@ -1,0 +1,201 @@
+# =========================================================
+# SafeFlux - Root .gitignore
+# React/Vite frontend + FastAPI/Python backend
+# =========================================================
+
+# -------------------------
+# Environment / Secrets
+# -------------------------
+.env
+.env.*
+!.env.example
+
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+.secret/
+credentials/
+credentials.json
+
+# -------------------------
+# Python / FastAPI
+# -------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+.venv/
+venv/
+env/
+ENV/
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+*.egg-info/
+.eggs/
+dist/
+build/
+
+pip-log.txt
+pip-delete-this-directory.txt
+
+# -------------------------
+# Local Databases
+# -------------------------
+*.db
+*.sqlite
+*.sqlite3
+
+# -------------------------
+# Node / React / Vite
+# -------------------------
+node_modules/
+frontend/node_modules/
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+frontend/dist/
+frontend/build/
+
+.vite/
+frontend/.vite/
+
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# -------------------------
+# Backend local env/files
+# -------------------------
+Backend/.env
+Backend/.env.*
+!Backend/.env.example
+Backend/.venv/
+Backend/venv/
+
+# If backend folder is later renamed lowercase
+backend/.env
+backend/.env.*
+!backend/.env.example
+backend/.venv/
+backend/venv/
+
+# -------------------------
+# Logs / Runtime files
+# -------------------------
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.swp
+*.swo
+*.pid
+*.pid.lock
+
+# -------------------------
+# Generated application data
+# -------------------------
+uploads/
+generated/
+exports/
+reports/generated/
+artifacts/
+
+# -------------------------
+# Test / Coverage output
+# -------------------------
+coverage/
+test-results/
+playwright-report/
+blob-report/
+screenshots/test/
+cypress/videos/
+cypress/screenshots/
+
+# -------------------------
+# IDE / Editor
+# -------------------------
+.vscode/
+.idea/
+*.code-workspace
+
+# -------------------------
+# OS files
+# -------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+*.lnk
+.AppleDouble
+.LSOverride
+*~
+.directory
+.Trash-*
+
+# -------------------------
+# Package manager caches
+# -------------------------
+.npm/
+.pnpm-store/
+.yarn/cache/
+.yarn/unplugged/
+
+# -------------------------
+# Build / Cache
+# -------------------------
+.cache/
+.eslintcache
+.parcel-cache/
+.turbo/
+
+# -------------------------
+# Security scanner output
+# -------------------------
+.gitleaks-report*
+.trufflehog*
+security-reports/
+
+# -------------------------
+# Optional AI / model artifacts
+# -------------------------
+*.onnx
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# -------------------------
+# Local/private data
+# -------------------------
+data/local/
+data/private/
+
+# -------------------------
+# Project docs MUST remain tracked
+# -------------------------
+# docs/SAFEFLUX_MASTER.md
+# docs/ARCHITECTURE.md
+# docs/SESSION_LOG.md
+# README.md
+# LICENSE
+
+
+freebuff
