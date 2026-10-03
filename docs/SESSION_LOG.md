@@ -4,7 +4,86 @@
 
 ---
 
-# Current Checkpoint — 2026-10-02 · PART 1 COMPLETE
+# Current Checkpoint — 2026-10-04 · PART 2 COMPLETE
+
+**Status:** 🟢 Part 2 (Authentication + Authorization) implemented and tested  
+**Project:** SafeFlux — Autonomous Process-Safety Failure Hunter  
+**Track:** Best Apps & Agents
+
+## What is complete (Part 2)
+
+### Backend
+
+- **Database layer** (`app/database/__init__.py`): SQLAlchemy 2.x engine/session factory,
+  declarative `Base`, `init_db()` (tables created on startup), `get_db()` request session.
+- **User model** (`app/models/user.py`): UUID string PK (non-enumerable), unique+indexed
+  lower-cased email, Argon2id `password_hash`, `is_active`, timestamps; `__repr__` excludes
+  the hash.
+- **Auth core** (`app/auth/`): `passwords.py` (Argon2id hash/verify + `burn_verify_time`
+  timing equalization), `tokens.py` (HS256 JWT, `iss`/`typ`/`sub` claims, rejects expired/
+  tampered/wrong-issuer), `session.py` (HttpOnly cookie set/clear), `dependencies.py`
+  (`get_current_user`), `ownership.py` (`get_owned_or_404`, `ensure_owner`).
+- **Endpoints** (`app/api/routes/auth.py`): `POST /api/v1/auth/signup|login|logout`,
+  `GET /api/v1/auth/me`, hidden alias `GET /api/v1/auth/session`.
+- **Schemas** (`app/schemas/auth.py`): `extra="forbid"`, `EmailStr`, name 2–120,
+  password 8–128, responses expose only `{id, fullName, email}`.
+- **Rate limiting** (`app/core/rate_limit.py`): extracted `FixedWindowLimiter`; per-app
+  `auth_rate_limit(request, bucket)` for signup/login (separate buckets, `429` +
+  `Retry-After`).
+- **Body-size guard** (`app/core/body_limit.py`): `413 PAYLOAD_TOO_LARGE` before parsing.
+- **Config** (`app/core/config.py`): `SESSION_TTL_MINUTES`, `AUTH_RATE_LIMIT_ATTEMPTS`,
+  `AUTH_RATE_LIMIT_WINDOW_SECONDS`, `MAX_REQUEST_BODY_BYTES`, all validated.
+- **Middleware stack** (`app/main.py`): lifespan calls `init_db()`; `app.state.auth_limiters`.
+
+### Frontend
+
+- Login/Signup placeholder copy replaced with real behavior notes; `ErrorPanel` now
+  surfaces backend `details[]` field errors (React-escaped).
+- `AuthProvider` queries `/auth/session`; `ProtectedRoute` fails closed.
+
+### Docs
+
+- `README.md` (auth section, 54 tests, new env vars), `ARCHITECTURE.md` §9/§10/§13,
+  `Backend/.env.example` updated; this checkpoint added.
+
+## Tests run
+
+- Backend: `python -m pytest` → **54 passed** (28 Part 1 + 26 Part 2). Part 2 covers signup,
+  hardened cookie flags, duplicate/weak/invalid/unknown-field validation, Argon2 storage,
+  hash never exposed, login success/failure, unknown-email indistinguishability, `/me` +
+  `/session`, expired/tampered/malformed/unknown-user tokens, logout, protected-endpoint
+  gating, login rate limit (`429` + `Retry-After`), ownership 404 semantics, oversized body.
+- Frontend: `npm run lint` → 0 warnings/errors; `npm run build` green.
+- Browser: login and both signup wizard steps verified at 1440×900, 834×1112 and 390×844
+  with **0 document overflow** (one-viewport rule).
+
+## Security audit (Part 2 · rules 1–25)
+
+- **Secrets:** `git ls-files` tracks only `Backend/.env.example` and `frontend/.env.example`;
+  `git check-ignore` confirms `.env`, `*.db`, `.venv`, `node_modules`, `dist` excluded. Full
+  tracked-file scan for key/token/private-key patterns found only test fixtures and
+  `postgresql://` documentation strings — **no real secrets**. No rotation required.
+- **Auth:** Argon2id hashing; HttpOnly cookie (no localStorage); JWT validated for
+  signature/issuer/expiry/`typ`; generic `401`s; timing equalization on unknown accounts;
+  `409` on duplicate signup.
+- **Authorization:** identity only from the verified cookie; ownership helpers return 404
+  on cross-user access; no client-supplied owner IDs trusted.
+- **Input/XSS:** Pydantic `extra="forbid"`; errors never echo values; frontend React-escaped.
+- **Rate/DoS:** separate signup/login buckets + global limiter + request body-size guard.
+- **Dependencies:** 4 new pinned deps (`sqlalchemy`, `argon2-cffi`, `PyJWT`,
+  `email-validator`), all used.
+- **Known limitation:** rate-limit state is per-process memory (revisit for multi-worker).
+- **API path decision:** brief's `/api/auth/*` implemented as `/api/v1/auth/*` (single
+  canonical prefix from Part 1) — recorded in ARCHITECTURE §9.
+
+## Next action
+
+Part 3 — Plant Setup + Configuration: owned `PlantConfig`/`PlantState`, CRUD with
+`get_owned_or_404`, validation, and one-viewport setup UI.
+
+---
+
+# Checkpoint — 2026-10-02 · PART 1 COMPLETE
 
 **Status:** 🟢 Part 1 (Repository Audit + Secure Foundation) implemented and tested  
 **Project:** SafeFlux — Autonomous Process-Safety Failure Hunter  

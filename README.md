@@ -15,7 +15,7 @@ equipment** — no PLC/DCS actuation, no real valve or pump control, ever.
 
 ## Status
 
-Build **Part 1 of 10 — secure foundation** is complete.
+Build **Part 2 of 10 — authentication + authorization** is complete.
 
 | Area | State |
 | --- | --- |
@@ -24,8 +24,10 @@ Build **Part 1 of 10 — secure foundation** is complete.
 | Error envelopes, security headers, strict CORS, rate limiting | ✅ |
 | React/Vite/TS/Tailwind app shell + public/protected routing | ✅ |
 | One-viewport workspace layout + loading/error foundations | ✅ |
-| Backend test suite (pytest) | ✅ 28 passing |
-| Authentication & authorization | ⏳ Part 2 |
+| Signup / login / logout / session (Argon2id + HttpOnly cookie) | ✅ |
+| `get_current_user()`, protected APIs, ownership foundation | ✅ |
+| Auth rate limiting + request body-size guard | ✅ |
+| Backend test suite (pytest) | ✅ 54 passing |
 | Plant setup / simulator / safety / search / AI agent | ⏳ Parts 3–8 |
 | Investigation UX / hardening | ⏳ Parts 9–10 |
 
@@ -83,7 +85,7 @@ npm run dev                        # http://localhost:5173
 
 ```bash
 # Backend (from Backend/)
-python -m pytest                   # 28 tests
+python -m pytest                   # 54 tests
 
 # Frontend (from frontend/)
 npm run lint                       # oxlint, 0 warnings
@@ -102,6 +104,9 @@ npm run build                      # tsc --strict + vite production build
 | `JWT_SECRET` | yes | ≥16 chars dev, ≥32 chars production |
 | `FRONTEND_URL` | yes | strict CORS allowlist (comma-separated origins) |
 | `RATE_LIMIT_REQUESTS` / `RATE_LIMIT_WINDOW_SECONDS` | no | baseline API rate limit |
+| `SESSION_TTL_MINUTES` | no (1440) | session cookie / JWT lifetime (5..43200) |
+| `AUTH_RATE_LIMIT_ATTEMPTS` / `AUTH_RATE_LIMIT_WINDOW_SECONDS` | no | tighter signup/login rate limit |
+| `MAX_REQUEST_BODY_BYTES` | no (65536) | reject oversized request bodies (≥1024) |
 | `NEBIUS_API_KEY` / `NEBIUS_BASE_URL` / `NEBIUS_MODEL` | Part 8 | AI provider — **backend only** |
 
 ### Frontend (`frontend/.env.example`)
@@ -128,7 +133,32 @@ Error:
 
 Stack traces, SQL, file paths, secrets and provider details are never returned.
 
-## Security baseline (Part 1)
+## Authentication (Part 2)
+
+All endpoints live under `/api/v1/auth/*` (the API prefix was fixed at `/api/v1` in Part 1):
+
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/auth/signup` | — | create account, start session |
+| `POST` | `/api/v1/auth/login` | — | sign in, start session |
+| `POST` | `/api/v1/auth/logout` | — | clear session cookie (idempotent) |
+| `GET` | `/api/v1/auth/me` | ✅ | current user |
+| `GET` | `/api/v1/auth/session` | ✅ | alias of `/me` (frontend session probe) |
+
+- Passwords hashed with **Argon2id**; plaintext is never stored, logged or returned.
+- The session token lives **only** in an `HttpOnly` cookie (`safeflux_session`) — never in
+  JavaScript, `localStorage`, or response bodies. `Secure` in production, `SameSite=Lax`.
+- `get_current_user()` resolves identity solely from the verified cookie; no endpoint ever
+  trusts a client-supplied user id.
+- Unknown-email logins still burn Argon2 CPU time, and duplicate emails return `409`, so
+  account enumeration is discouraged without leaking whether an account exists.
+- Ownership helpers (`get_owned_or_404`, `ensure_owner`) return **404** for cross-user
+  access so object existence is never leaked; every owned model carries an `owner_id` FK.
+
+## Security baseline
+
+### Part 1
+
 
 - Fail-fast environment validation; secrets wrapped in `SecretStr`
 - Strict CORS allowlist with credentials — never `*`
@@ -139,6 +169,16 @@ Stack traces, SQL, file paths, secrets and provider details are never returned.
 - Safe exception handling: 500s log internally, clients get a generic envelope
 - Frontend fails closed: no session → protected routes stay locked
 - No `dangerouslySetInnerHTML`; React-escaped rendering only
+
+### Part 2
+
+- Argon2id password hashing (OWASP-aligned library defaults)
+- HttpOnly session cookie; token never exposed to JavaScript
+- Per-IP rate limits on `/auth/signup` and `/auth/login` (separate buckets)
+- Request body-size guard → `413 PAYLOAD_TOO_LARGE` before parsing
+- Pydantic `extra="forbid"` schemas; validation errors never echo submitted values
+- Responses expose only `{id, fullName, email}` — never the password hash
+- Generic `401` messages; timing equalization on unknown accounts
 
 ## Documentation
 

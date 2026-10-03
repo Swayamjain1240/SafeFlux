@@ -1,7 +1,7 @@
 # SafeFlux — Architecture
 
-**Status:** Architecture baseline; Part 1 (secure foundation) implemented  
-**Last updated:** 2026-10-02
+**Status:** Architecture baseline; Part 2 (authentication + authorization) implemented  
+**Last updated:** 2026-10-04
 
 ---
 
@@ -210,33 +210,51 @@ No hard-coded secrets. Real `.env` files stay out of Git.
 
 ## 9. Authentication
 
-Recommended:
+Implemented in Part 2:
 
 ```text
 Signup/Login
    ↓
 Auth Service
    ↓
-Argon2/bcrypt
+Argon2id (argon2-cffi)
    ↓
-HttpOnly authenticated cookie
+HttpOnly authenticated cookie (safeflux_session)
    ↓
 get_current_user()
 ```
 
+**Endpoints** — the Part 2 brief named `/api/auth/*`; Part 1 fixed the API prefix at
+`/api/v1`, so auth endpoints are served at **`/api/v1/auth/*`** (single canonical prefix):
+
+```text
+POST /api/v1/auth/signup    → create account, start session (201)
+POST /api/v1/auth/login     → sign in, start session (200)
+POST /api/v1/auth/logout    → clear session cookie (200, idempotent)
+GET  /api/v1/auth/me        → current user (auth required)
+GET  /api/v1/auth/session   → strict alias of /me (hidden from schema)
+```
+
+**Session token** — JWT HS256 signed with `JWT_SECRET`, claims `sub`, `iat`, `exp`,
+`iss="safeflux"`, `typ="session"`; TTL from `SESSION_TTL_MINUTES`. Delivered **only** in
+the `safeflux_session` cookie: `HttpOnly` always, `Secure` in production only,
+`SameSite=Lax`, `Path=/`, `Max-Age` matching the token TTL. No `localStorage`.
+
 User:
 
 ```text
-id
+id            (UUID string — non-enumerable)
 full_name
-email
-password_hash
+email         (unique, indexed, stored lower-cased)
+password_hash (Argon2id)
 is_active
 created_at
 updated_at
 ```
 
-Never return password hashes.
+Never return password hashes. Login failures are generic (`401 Invalid email or
+password.`); unknown emails burn comparable Argon2 time so timing cannot enumerate
+accounts; duplicate signups return `409` case-insensitively.
 
 ---
 
@@ -260,6 +278,14 @@ Load resources with authenticated ownership checks.
 Never trust frontend-provided owner IDs.
 
 Test IDOR/cross-user access.
+
+Implemented in Part 2 (`app/auth/ownership.py`): every owned model carries an `owner_id`
+FK to `User.id`, and access goes through `get_owned_or_404(db, model, id, user)` or
+`ensure_owner(resource, user)`. Cross-user and missing resources both return **404** so an
+unauthorized caller cannot learn whether an object exists. The verified session user is
+the only identity used for the check — never a client-supplied `user_id`/`owner_id`.
+Ownership is exercised against a test resource in `Backend/tests/test_auth.py`; the
+Plant / AnalysisRun / Report models adopt the same helpers in Parts 3–9.
 
 ---
 
@@ -302,7 +328,17 @@ Also enforce hard request budgets.
 
 Implemented in Part 1: in-memory fixed-window limiter per client IP over `/api/v1/*`
 (`app/core/rate_limit.py`), health probe exempt, configured via `RATE_LIMIT_REQUESTS` /
-`RATE_LIMIT_WINDOW_SECONDS`. Endpoint-specific budgets arrive with their features.
+`RATE_LIMIT_WINDOW_SECONDS`.
+
+Implemented in Part 2: `auth_rate_limit(request, bucket)` gives sensitive endpoints their
+own tighter per-IP buckets. `/auth/signup` and `/auth/login` use separate buckets (so
+failed logins never block session checks), configured via `AUTH_RATE_LIMIT_ATTEMPTS` /
+`AUTH_RATE_LIMIT_WINDOW_SECONDS`; a breach returns `429 RATE_LIMITED` with `Retry-After`.
+Buckets live on `app.state.auth_limiters` so each app instance uses its own Settings.
+
+A `BodySizeLimitMiddleware` (`app/core/body_limit.py`) rejects oversized request bodies
+with `413 PAYLOAD_TOO_LARGE` (via `MAX_REQUEST_BODY_BYTES`) before the body is parsed.
+Endpoint-specific budgets for AI/simulation/search arrive with their features.
 
 ---
 

@@ -15,6 +15,10 @@ os.environ.setdefault("JWT_SECRET", "unit-test-secret-0123456789abcdef0123456789
 os.environ.setdefault("FRONTEND_URL", "http://localhost:5173")
 os.environ.setdefault("RATE_LIMIT_REQUESTS", "100000")
 os.environ.setdefault("RATE_LIMIT_WINDOW_SECONDS", "60")
+# Auth buckets are tested with explicit overrides; keep defaults generous
+# so unrelated tests never trip the per-endpoint limiter.
+os.environ.setdefault("AUTH_RATE_LIMIT_ATTEMPTS", "100000")
+os.environ.setdefault("AUTH_RATE_LIMIT_WINDOW_SECONDS", "60")
 
 import pytest
 from fastapi.testclient import TestClient
@@ -33,6 +37,8 @@ def make_settings(**overrides) -> Settings:
         "FRONTEND_URL": "http://localhost:5173",
         "RATE_LIMIT_REQUESTS": 100000,
         "RATE_LIMIT_WINDOW_SECONDS": 60,
+        "AUTH_RATE_LIMIT_ATTEMPTS": 100000,
+        "AUTH_RATE_LIMIT_WINDOW_SECONDS": 60,
         "_env_file": None,
     }
     base.update(overrides)
@@ -44,6 +50,17 @@ def _reset_settings_cache():
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _reset_database():
+    """Fresh schema per test — no state leaks between tests (rule 23)."""
+    from app.database import Base, get_engine
+    from app import models  # noqa: F401 - register metadata
+
+    Base.metadata.drop_all(get_engine())
+    Base.metadata.create_all(get_engine())
+    yield
 
 
 @pytest.fixture()
