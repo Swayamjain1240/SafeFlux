@@ -13,9 +13,10 @@ const SESSION_KEY = ['auth', 'session'] as const
 /**
  * Authentication state for the app shell.
  *
- * Part 1 note: /auth/* endpoints ship in Part 2. Until then every session
- * check fails closed → unauthenticated, so protected routes stay locked.
- * The backend remains the authority regardless of this client state.
+ * The session token lives only in an HttpOnly cookie set by the backend;
+ * this client never reads or stores it. On load we ask the backend who we
+ * are (GET /auth/session). Any failure fails closed → unauthenticated, so
+ * protected routes stay locked. The backend remains the authority.
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
@@ -56,7 +57,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await apiPost('/auth/logout')
     } catch {
-      // Clearing local state is always safe; backend sessions are handled in Part 2.
+      // Clearing local state is always safe: the cookie is HttpOnly and the
+      // server clears it on logout; even a network error must not keep us signed in.
     } finally {
       queryClient.removeQueries({ queryKey: SESSION_KEY })
     }

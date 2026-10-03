@@ -162,8 +162,7 @@ export default function SignupPage() {
         </p>
 
         <p className="mt-4 border-t border-slate-800 pt-3 text-center text-[11px] leading-relaxed text-slate-600">
-          Authentication endpoints ship in Part 2. Passwords will be hashed server-side
-          (Argon2/bcrypt) — never stored in plain text.
+          Passwords are hashed server-side with Argon2 and never stored in plain text.
         </p>
       </div>
     </div>

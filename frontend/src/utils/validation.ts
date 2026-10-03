@@ -33,7 +33,7 @@ export function validateSignupStep1(
   const name = fields.fullName.trim()
   if (!name) errors.fullName = 'Full name is required.'
   else if (name.length < 2) errors.fullName = 'Name is too short.'
-  else if (name.length > 80) errors.fullName = 'Name is too long.'
+  else if (name.length > 120) errors.fullName = 'Name is too long.'
   if (!fields.email.trim()) errors.email = 'Email is required.'
   else if (!isValidEmail(fields.email)) errors.email = 'Enter a valid email address.'
   return errors

@@ -90,8 +90,7 @@ export default function LoginPage() {
         </p>
 
         <p className="mt-4 border-t border-slate-800 pt-3 text-center text-[11px] leading-relaxed text-slate-600">
-          Authentication endpoints ship in Part 2 — submitting now surfaces the backend&apos;s safe
-          error response.
+          Sessions are held in a secure, HttpOnly cookie and expire automatically.
         </p>
       </div>
     </div>
