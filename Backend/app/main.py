@@ -7,15 +7,18 @@ error handling. Business logic lives in services/modules.
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
 from app import __version__
 from app.api.router import api_router
+from app.core.body_limit import BodySizeLimitMiddleware
 from app.core.config import Settings, get_settings
 from app.core.errors import register_exception_handlers
 from app.core.rate_limit import RateLimitMiddleware
 from app.core.security import SecurityHeadersMiddleware, add_cors_middleware
+from app.database import init_db
 
 API_PREFIX = "/api/v1"
 HEALTH_PATH = f"{API_PREFIX}/health"
@@ -36,6 +39,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings)
 
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):  # noqa: ANN202
+        # MVP: create tables on startup (migration tool arrives later).
+        init_db()
+        yield
+
     app = FastAPI(
         title="SafeFlux API",
         description=(
@@ -48,13 +57,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         docs_url=None if settings.is_production else "/docs",
         redoc_url=None,
         openapi_url=None if settings.is_production else "/openapi.json",
+        lifespan=lifespan,
     )
     app.state.settings = settings
+    app.state.auth_limiters = {}
 
     register_exception_handlers(app)
 
     # Add order matters: Starlette's last-added middleware is outermost.
-    # Desired stack (outer → inner): security headers → CORS → rate limit → routes.
+    # Desired stack (outer → inner): security headers → CORS → rate limit →
+    # body-size guard → routes.
+    app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.MAX_REQUEST_BODY_BYTES)
     app.add_middleware(
         RateLimitMiddleware,
         limit=settings.RATE_LIMIT_REQUESTS,

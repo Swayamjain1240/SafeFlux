@@ -59,6 +59,12 @@ class Settings(BaseSettings):
     RATE_LIMIT_REQUESTS: int = 120
     RATE_LIMIT_WINDOW_SECONDS: int = 60
 
+    # --- authentication (Part 2) ---
+    SESSION_TTL_MINUTES: int = 1440
+    AUTH_RATE_LIMIT_ATTEMPTS: int = 10
+    AUTH_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    MAX_REQUEST_BODY_BYTES: int = 65536
+
     # --- AI provider (Nebius / NVIDIA Nemotron), used from Part 8 ---
     NEBIUS_API_KEY: SecretStr | None = None
     NEBIUS_BASE_URL: str | None = None
@@ -120,6 +126,29 @@ class Settings(BaseSettings):
     def _validate_rate_limit_window(cls, value: int) -> int:
         if value < 1:
             raise ValueError("RATE_LIMIT_WINDOW_SECONDS must be >= 1")
+        return value
+
+    @field_validator("SESSION_TTL_MINUTES")
+    @classmethod
+    def _validate_session_ttl(cls, value: int) -> int:
+        if value < 5:
+            raise ValueError("SESSION_TTL_MINUTES must be >= 5")
+        if value > 43200:  # 30 days
+            raise ValueError("SESSION_TTL_MINUTES must be <= 43200")
+        return value
+
+    @field_validator("AUTH_RATE_LIMIT_ATTEMPTS", "AUTH_RATE_LIMIT_WINDOW_SECONDS")
+    @classmethod
+    def _validate_positive_auth_setting(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("auth rate-limit settings must be >= 1")
+        return value
+
+    @field_validator("MAX_REQUEST_BODY_BYTES")
+    @classmethod
+    def _validate_max_body_bytes(cls, value: int) -> int:
+        if value < 1024:
+            raise ValueError("MAX_REQUEST_BODY_BYTES must be >= 1024")
         return value
 
     @model_validator(mode="after")
