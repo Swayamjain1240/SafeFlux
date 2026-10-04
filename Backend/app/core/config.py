@@ -65,6 +65,13 @@ class Settings(BaseSettings):
     AUTH_RATE_LIMIT_WINDOW_SECONDS: int = 60
     MAX_REQUEST_BODY_BYTES: int = 65536
 
+    # --- deterministic simulator budgets (Part 4) ---
+    SIM_MAX_DURATION_S: float = 3600.0
+    SIM_MIN_TIME_STEP_S: float = 0.05
+    SIM_MAX_SAMPLES: int = 20000
+    SIM_RATE_LIMIT_RUNS: int = 30
+    SIM_RATE_LIMIT_WINDOW_SECONDS: int = 60
+
     # --- AI provider (Nebius / NVIDIA Nemotron), used from Part 8 ---
     NEBIUS_API_KEY: SecretStr | None = None
     NEBIUS_BASE_URL: str | None = None
@@ -149,6 +156,36 @@ class Settings(BaseSettings):
     def _validate_max_body_bytes(cls, value: int) -> int:
         if value < 1024:
             raise ValueError("MAX_REQUEST_BODY_BYTES must be >= 1024")
+        return value
+
+    @field_validator("SIM_MAX_DURATION_S")
+    @classmethod
+    def _validate_sim_max_duration(cls, value: float) -> float:
+        if value < 1.0:
+            raise ValueError("SIM_MAX_DURATION_S must be >= 1")
+        return value
+
+    @field_validator("SIM_MIN_TIME_STEP_S")
+    @classmethod
+    def _validate_sim_min_time_step(cls, value: float) -> float:
+        if value <= 0.0:
+            raise ValueError("SIM_MIN_TIME_STEP_S must be > 0")
+        return value
+
+    @field_validator("SIM_MAX_SAMPLES")
+    @classmethod
+    def _validate_sim_max_samples(cls, value: int) -> int:
+        if value < 2:
+            raise ValueError("SIM_MAX_SAMPLES must be >= 2")
+        if value > 1_000_000:
+            raise ValueError("SIM_MAX_SAMPLES must be <= 1000000")
+        return value
+
+    @field_validator("SIM_RATE_LIMIT_RUNS", "SIM_RATE_LIMIT_WINDOW_SECONDS")
+    @classmethod
+    def _validate_positive_sim_rate_limit(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("simulation rate-limit settings must be >= 1")
         return value
 
     @model_validator(mode="after")

@@ -18,7 +18,7 @@ from app.simulator.engine import (
     run_simulation,
 )
 from app.simulator.limits import SimulationLimits
-from app.simulator.model import ProcessParameters
+from app.simulator.model import ProcessParameters, volume_from_level
 from app.simulator.result import SimulationResult
 from app.simulator.scenario import (
     FaultSpec,
@@ -47,4 +47,5 @@ __all__ = [
     "SimulationLimits",
     "SimulationResult",
     "run_simulation",
+    "volume_from_level",
 ]

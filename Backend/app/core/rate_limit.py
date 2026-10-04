@@ -126,6 +126,36 @@ def _auth_limiter(request: Request, bucket: str) -> FixedWindowLimiter:
     return limiter
 
 
+def _simulation_limiter(request: Request) -> FixedWindowLimiter:
+    buckets: dict[str, FixedWindowLimiter] = request.app.state.simulation_limiters
+    limiter = buckets.get("run")
+    if limiter is None:
+        settings: Settings = request.app.state.settings
+        limiter = FixedWindowLimiter(
+            settings.SIM_RATE_LIMIT_RUNS,
+            settings.SIM_RATE_LIMIT_WINDOW_SECONDS,
+        )
+        buckets["run"] = limiter
+    return limiter
+
+
+async def simulation_rate_limit(request: Request) -> None:
+    """Per-IP budget for the expensive deterministic simulation endpoint.
+
+    Simulation is compute-heavy, so it gets its own tight bucket independent
+    of the auth buckets and the global limiter (rule 8).
+    """
+    limiter = _simulation_limiter(request)
+    ip = request.client.host if request.client else "unknown"
+    if not limiter.allow(f"simulate:{ip}"):
+        logger.warning("Simulation rate limit exceeded for %s", ip)
+        raise HTTPException(
+            status_code=429,
+            detail="Too many simulation requests. Please wait and try again.",
+            headers={"Retry-After": str(limiter.window_seconds)},
+        )
+
+
 async def auth_rate_limit(request: Request, bucket: str) -> None:
     """Tighter per-IP budget for one sensitive endpoint.
 
