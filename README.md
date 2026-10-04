@@ -15,7 +15,7 @@ equipment** — no PLC/DCS actuation, no real valve or pump control, ever.
 
 ## Status
 
-Build **Part 2 of 10 — authentication + authorization** is complete.
+Build **Part 3 of 10 — plant setup + configuration** is complete.
 
 | Area | State |
 | --- | --- |
@@ -27,8 +27,10 @@ Build **Part 2 of 10 — authentication + authorization** is complete.
 | Signup / login / logout / session (Argon2id + HttpOnly cookie) | ✅ |
 | `get_current_user()`, protected APIs, ownership foundation | ✅ |
 | Auth rate limiting + request body-size guard | ✅ |
-| Backend test suite (pytest) | ✅ 54 passing |
-| Plant setup / simulator / safety / search / AI agent | ⏳ Parts 3–8 |
+| Plant domain models + owned plant CRUD APIs | ✅ |
+| Viewport-safe 5-step plant wizard + React Flow topology preview | ✅ |
+| Backend test suite (pytest) | ✅ 79 passing |
+| Simulator / safety / search / AI agent | ⏳ Parts 4–8 |
 | Investigation UX / hardening | ⏳ Parts 9–10 |
 
 ---
@@ -155,6 +157,32 @@ All endpoints live under `/api/v1/auth/*` (the API prefix was fixed at `/api/v1`
 - Ownership helpers (`get_owned_or_404`, `ensure_owner`) return **404** for cross-user
   access so object existence is never leaked; every owned model carries an `owner_id` FK.
 
+## Plant configuration (Part 3)
+
+All endpoints live under `/api/v1/plants/*` and require an authenticated session:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/v1/plants` | create a plant + configuration (`201`) |
+| `GET` | `/api/v1/plants` | list the caller's plants |
+| `GET` | `/api/v1/plants/{id}` | full plant detail |
+| `PATCH` | `/api/v1/plants/{id}` | partial update |
+| `DELETE` | `/api/v1/plants/{id}` | delete the plant + children (`204`) |
+| `GET` | `/api/v1/plants/{id}/state` | dynamic initial process state |
+
+A plant is modelled by five records: identity/ownership (`Plant`), static `PlantConfig`,
+initial `PlantState`, `SafetyLimits` and `SafeguardConfig`. Ownership is the session user
+only — the id is never accepted from the client — and cross-user access returns **404** so
+existence is never leaked. All numeric fields are re-validated server-side against
+conservative engineering bounds, and the initial state must sit below the configured trip
+limits (enforced on create **and** re-checked on every `PATCH`).
+
+The setup UI is a **5-step, one-viewport wizard** (identity → conditions → equipment →
+safety → review) with an optional **React Flow** topology preview
+(`Feed Tank → Pump P-101 → Heated Reactor R-101 → Outlet Valve V-101 → Product Tank`).
+The preview is static: SafeFlux configures a simulation model and never controls real
+plant equipment.
+
 ## Security baseline
 
 ### Part 1
@@ -179,6 +207,16 @@ All endpoints live under `/api/v1/auth/*` (the API prefix was fixed at `/api/v1`
 - Pydantic `extra="forbid"` schemas; validation errors never echo submitted values
 - Responses expose only `{id, fullName, email}` — never the password hash
 - Generic `401` messages; timing equalization on unknown accounts
+
+### Part 3
+
+- Every plant route requires a verified session; `owner_id` is server-assigned only
+- `get_owned_or_404` → **404** on missing *and* cross-user resources (no existence leak)
+- Server-side range validation on all configuration/state/limit fields; `extra="forbid"`
+- Initial state must be ≤ trip limits on create, and the same invariant is re-checked (with
+  rollback + `422`) after every `PATCH`
+- Plant detail/list responses never expose `owner_id`
+- Setup is a simulation design input — no code path actuates real equipment
 
 ## Documentation
 

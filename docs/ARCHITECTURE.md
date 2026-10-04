@@ -285,7 +285,13 @@ FK to `User.id`, and access goes through `get_owned_or_404(db, model, id, user)`
 unauthorized caller cannot learn whether an object exists. The verified session user is
 the only identity used for the check — never a client-supplied `user_id`/`owner_id`.
 Ownership is exercised against a test resource in `Backend/tests/test_auth.py`; the
-Plant / AnalysisRun / Report models adopt the same helpers in Parts 3–9.
+Plant model adopts the same helpers in Part 3 (`Backend/app/api/routes/plants.py`), and
+AnalysisRun / Report follow in Parts 6–9.
+
+Part 3 (`Plants`): every route requires `get_current_user`, `owner_id` is set from the
+session user on create and never read from the payload, and all reads/writes/deletes go
+through `get_owned_or_404`. `Backend/tests/test_plants.py` covers IDOR for read, list,
+state, update and delete.
 
 ---
 
@@ -379,19 +385,57 @@ Rules:
 - no committed DB files,
 - migrations when schema stabilizes.
 
+Implemented entities:
+
+- `users` (Part 2),
+- `plants`, `plant_configs`, `plant_states`, `safety_limits`, `safeguard_configs` (Part 3).
+
 Planned entities:
 
-User, Plant, AnalysisRun, EngineeringChange, Scenario, SimulationResult, SafetyFinding, SafeguardEvent, AgentDecision, Report.
+AnalysisRun, EngineeringChange, Scenario, SimulationResult, SafetyFinding, SafeguardEvent, AgentDecision, Report.
 
 ---
 
 ## 16. Plant Domain
 
-PlantConfig: mostly static configuration and limits.
+Implemented in Part 3 (`Backend/app/models/plant.py`, `app/schemas/plant.py`,
+`app/api/routes/plants.py`). Endpoints are `/api/v1/plants/*` (the brief's `/api/plants/*`
+maps onto the single canonical `/api/v1` prefix fixed in Part 1).
 
-PlantState: dynamic state.
+The locked MVP process:
 
-For sensor faults, keep true process state separate from observed sensor state.
+```text
+Feed Tank → Pump P-101 → Heated Reactor R-101 → Outlet Valve V-101 → Product Tank
+```
+
+One plant is five rows (all owned by `Plant`, cascading on delete):
+
+- **`Plant`** — identity + ownership (`owner_id` → `users.id`, indexed) + timestamps.
+- **`PlantConfig`** — static engineered configuration: `feed_flow_lpm` (0–500),
+  `cooling_pct` / `valve_position_pct` / `heater_power_pct` (0–100), `shutdown_delay_s`
+  (0–3600).
+- **`PlantState`** — dynamic initial condition: `pump_running`, `temperature_c`
+  (−50–1000), `pressure_bar` (0–500), `level_pct` (0–100). The pump flag lives here
+  because it is equipment state, not configuration.
+- **`SafetyLimits`** — configured trip limits: `max_temperature_c`, `max_pressure_bar`,
+  `max_level_pct`.
+- **`SafeguardConfig`** — `auto_shutdown_enabled`, per-variable high trips, `trip_delay_s`.
+
+Rules:
+
+- every endpoint is authenticated and owner-scoped (`get_owned_or_404`);
+- `PlantCreate` rejects an initial state already above a trip limit, and every `PATCH`
+  re-checks the same invariant (rollback + `422 VALIDATION_ERROR`) so a partial update can
+  never leave an inconsistent plant;
+- `extra="forbid"` + server-side range bounds on every numeric field; errors never echo
+  values; responses never expose `owner_id`.
+
+These values are **design inputs to the simulation** — SafeFlux has no path to real
+industrial equipment. For sensor faults (Parts 5+), keep true process state separate from
+observed sensor state.
+
+UI: `frontend/src/components/plant/PlantWizard.tsx` (5-step, one-viewport) and
+`ProcessTopology.tsx` (static React Flow preview; no fake live movement).
 
 ---
 

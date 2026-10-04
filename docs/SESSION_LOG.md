@@ -4,7 +4,91 @@
 
 ---
 
-# Current Checkpoint — 2026-10-04 · PART 2 COMPLETE
+# Current Checkpoint — 2026-10-04 · PART 3 COMPLETE
+
+**Status:** 🟢 Part 3 (Plant Setup + Configuration) implemented and tested  
+**Project:** SafeFlux — Autonomous Process-Safety Failure Hunter  
+**Track:** Best Apps & Agents
+
+## What is complete (Part 3)
+
+### Backend
+
+- **Plant domain models** (`app/models/plant.py`): five tables modelling one plant —
+  `Plant` (UUID PK, `owner_id` FK→`users.id`, indexed, identity + timestamps),
+  `PlantConfig` (static engineered configuration: feed flow, cooling, valve, heater,
+  shutdown delay), `PlantState` (dynamic initial condition incl. `pump_running`),
+  `SafetyLimits` (trip limits), `SafeguardConfig` (armed safeguards + trip delay).
+  Child rows are one-to-one (`unique` `plant_id`, `ON DELETE CASCADE`) and cascade with
+  the plant; `pump_running` lives on `PlantState` because it is equipment state, not config.
+- **Schemas** (`app/schemas/plant.py`): `extra="forbid"`; conservative engineering bounds
+  (feed 0–500 L/min, cooling/valve/heater 0–100 %, delays 0–3600 s, T −50–1000 °C,
+  P 0–500 bar, level 0–100 %); `PlantCreate` enforces initial state ≤ trip limits;
+  `PlantUpdate` is all-optional with nested blocks replaced wholesale; out-models never
+  expose `owner_id`.
+- **Endpoints** (`app/api/routes/plants.py`, prefix `/api/v1/plants`): `POST` (201),
+  `GET` list, `GET/{id}`, `PATCH/{id}`, `DELETE/{id}` (204), `GET/{id}/state`. Every route
+  requires `get_current_user`; owner is always the session user; reads/writes go through
+  `get_owned_or_404` (404 for missing **and** cross-user). A post-PATCH consistency guard
+  re-checks state ≤ limits and rolls back with a `422 VALIDATION_ERROR` otherwise.
+- **Router** (`app/api/router.py`): plants router mounted.
+
+### Frontend
+
+- **API client** (`src/api/client.ts`): added `apiPatch` and `apiDelete` (204-safe).
+- **Plants API + hooks** (`src/api/plants.ts`, `src/hooks/usePlants.ts`): CRUD via React Query
+  with cache invalidation (`plantKeys`).
+- **Types** (`src/types/plant.ts`): mirrors the backend schemas + MVP defaults.
+- **Wizard validation** (`src/utils/plantValidation.ts`): per-step client rules incl. the
+  state-below-limits consistency check; draft→payload conversion.
+- **5-step viewport-safe wizard** (`src/components/plant/PlantWizard.tsx`): identity →
+  conditions → equipment → safety → review; each step fits one viewport, Back/Next visible.
+- **Process topology preview** (`src/components/plant/ProcessTopology.tsx`, React Flow
+  `@xyflow/react`): Feed Tank → Pump P-101 → Heated Reactor R-101 → Outlet Valve V-101 →
+  Product Tank. Purely static — no fake live movement, no control implication.
+- **Plant page** (`src/pages/PlantSetupPage.tsx`): list / detail / wizard, delete with confirm;
+  `/plant` route now wired (replaces the Part 3 `ComingSoon`).
+
+### Docs
+
+- `README.md` (status, Part 3 section, security baseline), `ARCHITECTURE.md` §10/§15/§16,
+  this checkpoint.
+
+## Tests run
+
+- Backend: `python -m pytest` → **79 passed** (28 Part 1 + 26 Part 2 + 25 Part 3). Part 3
+  covers create-with-full-config, auth required, list-is-own-only, detail + state, missing →
+  404, invalid-range parametrization, initial-state-above-limit rejection, unknown-field
+  rejection, state-not-persisted-on-rejected-update, and IDOR read/list/state/update/delete.
+- Frontend: `npm run lint` → 0 warnings/errors; `npm run build` green (tsc strict).
+- Browser: full 5-step wizard driven end-to-end (created a plant, values persisted),
+  React Flow preview rendered in review **and** detail; verified at 1440×900, 834×1112 and
+  390×844 with **0 document overflow** and every step fitting the content region.
+- API: login → `GET /plants` and `GET /plants/{id}/state` returned the wizard-created plant
+  with matching values (feed 120 L/min, 30 °C · 2.5 bar · 40 %).
+
+## Security audit (Part 3 · rules 1–25)
+
+- **Secrets:** none introduced; DB is env-based and `*.db` stays gitignored; no new keys.
+- **Authorization:** all plant routes authenticated; `owner_id` never accepted from the
+  client; `get_owned_or_404` returns 404 for cross-user access (no existence leak).
+- **Input/XSS:** Pydantic `extra="forbid"` + range bounds re-validated server-side; the
+  create validator and the PATCH consistency guard block states above trip limits; errors
+  never echo submitted values; frontend renders via React-escaped children only.
+- **Simulation-only:** plant setup is a *design input* to a simulation model — no path to
+  real equipment control; the topology preview is explicitly static.
+- **Dependencies:** 1 new frontend dep (`@xyflow/react@12.12.0`), used; build/lint clean.
+- **API path decision:** brief's `/api/plants/*` implemented as `/api/v1/plants/*`
+  (single canonical prefix from Part 1) — recorded in ARCHITECTURE §16.
+
+## Next action
+
+Part 4 — Simulator: deterministic process simulation consuming `PlantConfig` + initial
+`PlantState` + scenario + duration/timestep, producing time-series telemetry.
+
+---
+
+# Checkpoint — 2026-10-04 · PART 2 COMPLETE
 
 **Status:** 🟢 Part 2 (Authentication + Authorization) implemented and tested  
 **Project:** SafeFlux — Autonomous Process-Safety Failure Hunter  
