@@ -10,7 +10,16 @@ from app.simulator.constants import (
     MODEL_VERSION,
     SIMULATOR_VERSION,
 )
+from app.simulator.engine import (
+    LimitSet,
+    SafeguardSettings,
+    SimulationInput,
+    SimulationLimitError,
+    run_simulation,
+)
 from app.simulator.limits import SimulationLimits
+from app.simulator.model import ProcessParameters
+from app.simulator.result import SimulationResult
 from app.simulator.scenario import (
     FaultSpec,
     FaultType,
@@ -23,12 +32,19 @@ from app.simulator.scenario import (
 __all__ = [
     "FaultSpec",
     "FaultType",
+    "LimitSet",
     "MODEL_NAME",
     "MODEL_VERSION",
+    "ProcessParameters",
     "SIMULATOR_VERSION",
+    "SafeguardSettings",
     "Scenario",
     "SensorFailureMode",
     "SensorFault",
     "SensorType",
+    "SimulationInput",
+    "SimulationLimitError",
     "SimulationLimits",
+    "SimulationResult",
+    "run_simulation",
 ]
