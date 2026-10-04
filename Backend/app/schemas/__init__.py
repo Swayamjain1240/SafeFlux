@@ -5,6 +5,12 @@ from app.schemas.auth import (
     SessionUser,
     SignupRequest,
 )
+from app.schemas.simulation import (
+    FaultIn,
+    ScenarioIn,
+    SensorFaultIn,
+    SimulationRunRequest,
+)
 from app.schemas.plant import (
     PlantConfigIn,
     PlantConfigOut,
@@ -27,6 +33,7 @@ from app.schemas.plant import (
 )
 
 __all__ = [
+    "FaultIn",
     "LoginRequest",
     "PlantConfigIn",
     "PlantConfigOut",
@@ -46,8 +53,11 @@ __all__ = [
     "SafeguardConfigOut",
     "SafetyLimitsIn",
     "SafetyLimitsOut",
+    "ScenarioIn",
+    "SensorFaultIn",
     "SessionData",
     "SessionEnvelope",
     "SessionUser",
     "SignupRequest",
+    "SimulationRunRequest",
 ]
