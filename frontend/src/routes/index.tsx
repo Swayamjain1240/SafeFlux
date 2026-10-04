@@ -6,6 +6,7 @@ import DashboardPage from '../pages/DashboardPage'
 import LandingPage from '../pages/LandingPage'
 import LoginPage from '../pages/LoginPage'
 import NotFoundPage from '../pages/NotFoundPage'
+import PlantSetupPage from '../pages/PlantSetupPage'
 import SignupPage from '../pages/SignupPage'
 import ProtectedRoute from './ProtectedRoute'
 
@@ -23,7 +24,7 @@ export default function AppRoutes() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/plant" element={<ComingSoon title="Plant setup" part={3} />} />
+          <Route path="/plant" element={<PlantSetupPage />} />
           <Route path="/monitor" element={<ComingSoon title="Live monitoring" part={5} />} />
           <Route path="/analysis/new" element={<ComingSoon title="New analysis" part={7} />} />
           <Route
