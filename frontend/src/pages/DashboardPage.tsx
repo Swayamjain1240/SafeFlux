@@ -8,7 +8,7 @@ interface StatCard {
 }
 
 const STATS: StatCard[] = [
-  { label: 'Plant configurations', value: '0', hint: 'Plant setup ships in Part 3' },
+  { label: 'Plant configurations', value: '0', hint: 'Configure plants in Plant setup' },
   { label: 'Active analyses', value: '0', hint: 'Scenario search ships in Part 7' },
   { label: 'Safety findings', value: '—', hint: 'Safety engine ships in Part 5' },
   { label: 'Safeguard checks', value: '—', hint: 'Safeguards ship in Part 9' },
