@@ -4,7 +4,93 @@
 
 ---
 
-# Current Checkpoint — 2026-10-04 · PART 3 COMPLETE
+# Current Checkpoint — 2026-10-04 · PART 4 COMPLETE
+
+**Status:** 🟢 Part 4 (Deterministic Process Simulator) implemented and tested  
+**Project:** SafeFlux — Autonomous Process-Safety Failure Hunter  
+**Track:** Best Apps & Agents
+
+## Pre-work audit (docs vs code, Parts 1–3)
+
+- OpenAPI paths (`/api/v1/auth/*`, `/api/v1/health`, `/api/v1/plants/*`) match the README
+tables exactly; ARCHITECTURE §15/§16 match the models; **79/79** tests passed.
+- One drift found and fixed in this part: `SAFEFLUX_MASTER.md` §26 still described the
+project as "as of 2026-10-02 … next action: begin Prompt 1/10".
+
+## What is complete (Part 4)
+
+### Backend
+
+- **Deps** (`requirements.txt`): `numpy==2.5.3`, `scipy==1.18.1`.
+- **Constants** (`app/simulator/constants.py`): units, nominal equipment magnitudes,
+  simulator/model version and the documented assumptions + limitations surfaced in every
+  result.
+- **Scenario + faults** (`scenario.py`): `Scenario`, `FaultSpec`, `SensorFault` data model;
+  deterministic, RNG-free.
+- **Compute budgets** (`limits.py`): `SimulationLimits` with sample-count and
+  `validation_errors()` used before any integration.
+- **Model** (`model.py`): `ProcessParameters` (pure), mass balance, gravity-driven outlet,
+  heater/jacket cooling, energy balance with feed advection, level clamping, and a
+  documented **pressure proxy**.
+- **Fault injection** (`faults.py`): cooling degradation/loss, outlet restriction, valve
+  stuck, feed increase, pump variation; `apply_sensor_faults` touches observed readings
+  only.
+- **Result** (`result.py`): columnar series, extrema, summary, events, metadata.
+- **Engine** (`engine.py`): segmented `solve_ivp`, uniform sampling, observed-vs-true
+  separation, grid-resolved delayed shutdown (one re-integration), events/extrema/summary.
+- **API**: strict schemas (`app/schemas/simulation.py`) and authenticated
+  `POST /api/v1/simulations/run` (`app/api/routes/simulations.py`) with owner-scoped plant
+  loading, configurable budgets and a dedicated per-IP rate-limit bucket.
+- **Config**: `SIM_MAX_DURATION_S`, `SIM_MIN_TIME_STEP_S`, `SIM_MAX_SAMPLES`,
+  `SIM_RATE_LIMIT_RUNS`, `SIM_RATE_LIMIT_WINDOW_SECONDS` (+ `.env.example`).
+
+### Docs
+
+- `README.md` (status, Part 4 section, security baseline), `ARCHITECTURE.md` §13/§17,
+  `SAFEFLUX_MASTER.md` §26 synced, this checkpoint.
+
+## Tests run
+
+- Backend: `python -m pytest` → **111 passed** (28 Part 1 + 26 Part 2 + 25 Part 3 +
+  21 simulator + 11 simulation API).
+- Simulator tests assert **direction**, not invented numbers: higher heating is not cooler,
+  stronger cooling is not hotter, cooling loss crosses the temperature limit, greater outlet
+  restriction never increases outlet flow, feed increase raises level, and combined
+  feed + cooling degradation is worse in both dimensions.
+- Repeatability: identical inputs produce byte-identical result documents; sensor faults
+  leave the true trajectory unchanged; delayed shutdown fires `trip_delay_s` after the
+  crossing.
+- Budgets: over-duration, sub-minimum time step and over-sample requests are rejected with
+  `422 VALIDATION_ERROR` and per-field details (no echoed values); the endpoint returns
+  `429 RATE_LIMITED` with `Retry-After` past its bucket.
+- Reproducible single scenario verified end-to-end through the API (baseline: 301 samples,
+  final 58.94 °C; cooling loss crosses the 150 °C limit and shuts down at crossing + delay).
+
+## Security audit (Part 4 · rules 1–25)
+
+- **Secrets:** none introduced; no new external API key (rule 22 not triggered);
+  `*.db`/`.env` remain gitignored.
+- **Authorization:** the simulation route requires a session and loads the plant via
+  `get_owned_or_404`; cross-user simulation returns 404 (tested).
+- **Abuse/DoS:** hard duration/time-step/sample budgets enforced before integration, plus a
+  dedicated per-IP simulation rate-limit bucket and the shared body-size guard.
+- **Input:** strict `extra="forbid"` schemas, bounded fault counts, per-type parameter
+  requirements; errors never echo submitted values (tested).
+- **Determinism:** no RNG, no LLM; the numeric path is fully reproducible.
+- **Dependencies:** 2 new pinned runtime deps (`numpy`, `scipy`), both used; no unused
+  packages added.
+- **Safety language:** results carry assumptions/limitations and are described as simulated
+  behaviour under a simplified model — never certified.
+
+## Next action
+
+Part 5 — Safety Engine + Telemetry: classify simulated trajectories into
+SAFE / NEAR_LIMIT / SAFEGUARD_ACTIVATED / VIOLATION, record `SafetyFinding` evidence, and
+stream telemetry (SSE) to the frontend.
+
+---
+
+# Checkpoint — 2026-10-04 · PART 3 COMPLETE
 
 **Status:** 🟢 Part 3 (Plant Setup + Configuration) implemented and tested  
 **Project:** SafeFlux — Autonomous Process-Safety Failure Hunter  

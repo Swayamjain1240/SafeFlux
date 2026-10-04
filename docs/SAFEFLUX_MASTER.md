@@ -5,7 +5,7 @@
 **Hackathon:** Nebius × NVIDIA Global AI Hackathon  
 **Track:** Best Apps & Agents  
 **Owner:** Swayam Jain  
-**Last updated:** 2026-10-02
+**Last updated:** 2026-10-04
 
 ---
 
@@ -703,18 +703,17 @@ Repository code and current docs are the technical source of truth.
 
 ## 26. Current State
 
-As of 2026-10-02:
+As of 2026-10-04:
 
-- concept locked,
-- MVP scope locked,
-- product workflow locked,
-- tech stack defined,
-- security requirements expanded and locked,
-- one-viewport UI rule locked,
-- 10-part build plan locked,
-- Debugging Duck protocol locked,
-- project documentation restored.
+- concept, MVP scope, product workflow and tech stack locked,
+- security requirements, one-viewport UI rule, 10-part build plan and Debugging Duck
+  protocol locked,
+- **Part 1** (secure foundation) complete,
+- **Part 2** (authentication + authorization) complete,
+- **Part 3** (plant setup + configuration) complete,
+- **Part 4** (deterministic process simulator) complete.
 
 ### Next action
 
-Run Debugging Duck, then begin Prompt 1/10 only if the repository is aligned.
+Part 5 — Safety Engine + Telemetry — then continue the build plan part by part, running
+Debugging Duck after each part.

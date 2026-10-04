@@ -15,7 +15,7 @@ equipment** — no PLC/DCS actuation, no real valve or pump control, ever.
 
 ## Status
 
-Build **Part 3 of 10 — plant setup + configuration** is complete.
+Build **Part 4 of 10 — deterministic process simulator** is complete.
 
 | Area | State |
 | --- | --- |
@@ -29,8 +29,10 @@ Build **Part 3 of 10 — plant setup + configuration** is complete.
 | Auth rate limiting + request body-size guard | ✅ |
 | Plant domain models + owned plant CRUD APIs | ✅ |
 | Viewport-safe 5-step plant wizard + React Flow topology preview | ✅ |
-| Backend test suite (pytest) | ✅ 79 passing |
-| Simulator / safety / search / AI agent | ⏳ Parts 4–8 |
+| Deterministic simulator (NumPy/SciPy) + fault injection | ✅ |
+| Authenticated `POST /api/v1/simulations/run` with compute budgets | ✅ |
+| Backend test suite (pytest) | ✅ 111 passing |
+| Safety engine / dashboard / search / AI agent | ⏳ Parts 5–8 |
 | Investigation UX / hardening | ⏳ Parts 9–10 |
 
 ---
@@ -183,6 +185,42 @@ safety → review) with an optional **React Flow** topology preview
 The preview is static: SafeFlux configures a simulation model and never controls real
 plant equipment.
 
+## Deterministic simulator (Part 4)
+
+One endpoint, authenticated and owner-scoped:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/v1/simulations/run` | run one deterministic scenario against the caller's plant |
+
+The simulator evolves a **lumped, well-mixed** model of the locked process. Identical
+inputs always produce identical outputs — there is **no RNG and no LLM** in the physics.
+
+**Input:** the plant's `PlantConfig` + initial `PlantState`, plus a scenario (duration,
+time step, deterministic faults, sensor faults).
+
+**Output (`SimulationResult`):** time-series state, per-variable extrema, events, summary
+metrics and version metadata.
+
+**Model (units in the code):** mass balance on reactor volume; gravity-driven outlet
+`outlet = K · valve_fraction · √(level)`; heater power and jacket cooling
+`cooling = UA · max(T − T_coolant, 0)`; energy balance with feed advection; and a
+documented **pressure proxy** (atmospheric + temperature + static head) that is *not* a
+real vapour-pressure calculation. Overflow/dry-out clamp the level.
+
+**Deterministic faults:** cooling degradation, complete cooling loss, outlet restriction,
+valve stuck, feed-flow increase, pump variation — plus **sensor faults** (bias/freeze)
+that change *observed* readings only, so `true_temperature_c` and
+`observed_temperature_c` stay separable, and **delayed shutdown** when an armed trip is
+crossed.
+
+**Abuse protection:** hard budgets enforced server-side before any integration —
+`SIM_MAX_DURATION_S`, `SIM_MIN_TIME_STEP_S`, `SIM_MAX_SAMPLES` — plus a dedicated per-IP
+rate-limit bucket (`SIM_RATE_LIMIT_RUNS`) and the existing request body-size guard.
+
+The model is a simplified decision-support prototype for *simulated* behaviour. It is
+**not** certified industrial safety software and never drives real equipment.
+
 ## Security baseline
 
 ### Part 1
@@ -217,6 +255,17 @@ plant equipment.
   rollback + `422`) after every `PATCH`
 - Plant detail/list responses never expose `owner_id`
 - Setup is a simulation design input — no code path actuates real equipment
+
+### Part 4
+
+- `POST /api/v1/simulations/run` requires a verified session and loads the plant with
+  `get_owned_or_404` — another user's plant returns **404** (IDOR-safe)
+- Hard compute budgets (max duration, min time step, max sample count) reject abusive
+  requests **before** integration; no request can create unbounded steps
+- Dedicated per-IP rate-limit bucket for the expensive simulation endpoint
+- Strict `extra="forbid"` scenario schemas with bounded fault counts
+- Deterministic physics only — no RNG, no LLM in the numeric path; sensor faults affect
+  observed readings, never the true state
 
 ## Documentation
 

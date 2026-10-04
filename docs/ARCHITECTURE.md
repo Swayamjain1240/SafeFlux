@@ -344,7 +344,12 @@ Buckets live on `app.state.auth_limiters` so each app instance uses its own Sett
 
 A `BodySizeLimitMiddleware` (`app/core/body_limit.py`) rejects oversized request bodies
 with `413 PAYLOAD_TOO_LARGE` (via `MAX_REQUEST_BODY_BYTES`) before the body is parsed.
-Endpoint-specific budgets for AI/simulation/search arrive with their features.
+
+Implemented in Part 4: `simulation_rate_limit(request)` gives the expensive
+`POST /simulations/run` endpoint its own per-IP bucket (`SIM_RATE_LIMIT_RUNS` /
+`SIM_RATE_LIMIT_WINDOW_SECONDS`), stored on `app.state.simulation_limiters`, on top of the
+hard simulation compute budgets. Endpoint-specific budgets for AI/search arrive with
+their features.
 
 ---
 
@@ -441,25 +446,73 @@ UI: `frontend/src/components/plant/PlantWizard.tsx` (5-step, one-viewport) and
 
 ## 17. Simulator
 
-Input:
+Implemented in Part 4 (`Backend/app/simulator/`): constants, scenario/fault data model,
+compute budgets, the process model, the deterministic engine and the result container.
+Endpoint `POST /api/v1/simulations/run` (`app/api/routes/simulations.py`), owner-scoped.
 
-PlantConfig + initial state + scenario + duration + timestep.
+Input: the plant's `PlantConfig` + initial `PlantState`, plus a scenario (duration, time
+step, deterministically scheduled faults, sensor faults). Output (`SimulationResult`):
+columnar time series, per-variable extrema, events, summary metrics and version metadata.
 
-Output:
+### State and equations
 
-time-series + extrema + events + version metadata.
+State vector `y = [volume_l, temperature_c]`; everything else is algebraic. Units: `L`,
+`lpm`, `°C`, `bar`, `s`, `kW`, `kJ/(L·K)`.
 
-Model:
+```text
+level_pct      = 100 · V / V_nominal                                  (clamped 0–100)
+feed_lpm       = feed_flow_lpm · fault_feed · pump_factor             (0 if pump off)
+valve_fraction = (valve_position_pct / 100) · fault_outlet
+outlet_lpm     = K_out · valve_fraction · sqrt(level/100)
+heater_kw      = HEATER_MAX_KW · heater_power_pct / 100
+cooling_kw     = UA_max · cooling_pct/100 · fault_cooling · max(T − T_coolant, 0)
+pressure_bar   = P_atm + k_T · max(T − T_ref, 0) + k_L · (level/100)
 
-- material balance,
-- feed/outlet,
-- heating/cooling,
-- temperature,
-- simplified pressure,
-- equipment effects,
-- fault injection.
+dV/dt = feed_lpm/60 − outlet_lpm/60
+dT/dt = (heater_kw − cooling_kw + CP·Q_feed·(T_feed − T)) / (CP·max(V, V_min))
+```
 
-Use NumPy/SciPy. Document simplifications. No random core telemetry.
+Expanding `d(V·T)/dt` with `dV/dt = feed − outlet` cancels the outlet enthalpy term, so
+only *feed* advection appears — draining a well-mixed vessel does not by itself change its
+temperature. At the level bounds the volume derivative is zeroed (excess feed spills at
+100 %; no liquid drains at 0 %). Cooling never adds heat (the driving force is clamped at
+zero), and a dry vessel holds its temperature.
+
+### Determinism and integration
+
+SciPy `solve_ivp` (`RK45`, fixed `rtol=1e-9`/`atol=1e-11`) integrates **one call per
+smooth segment** between scheduled fault changes, so step changes are honoured rather than
+smeared across an adaptive step. There is no RNG: identical inputs give identical output,
+and tests assert that by comparing whole result documents.
+
+### Faults
+
+Deterministic step changes, applied in start-time order: cooling degradation, complete
+cooling loss, outlet restriction, valve stuck, feed increase, pump variation. **Sensor
+faults** (bias or freeze) affect *observed* series only — `true_temperature_c` vs
+`observed_temperature_c` — so a failed sensor can never change the physics. **Shutdown
+delay**: the first armed limit crossing schedules an emergency shutdown `trip_delay_s`
+later (grid-resolved) — stop the feed pump and cut the heater — and the run is
+re-integrated once with it applied. A dry vessel (no liquid) holds its temperature rather
+than heating an empty shell.
+
+### Abuse protection
+
+Budgets are enforced before integration: `SIM_MAX_DURATION_S`, `SIM_MIN_TIME_STEP_S`,
+`SIM_MAX_SAMPLES`; the endpoint also has its own per-IP rate-limit bucket
+(`SIM_RATE_LIMIT_RUNS` / `SIM_RATE_LIMIT_WINDOW_SECONDS`) and the global body-size guard.
+
+### Assumptions and limitations
+
+Surfaced in every result's `metadata.assumptions` / `metadata.limitations`: perfectly-mixed
+single volume, water-like constant properties, fixed feed temperature, linear jacket
+cooling, gravity-driven outlet, level clamping, and a **pressure proxy that is not vapour
+pressure**. No reaction kinetics, no heat-exchanger dynamics, no pump curve, no pipe
+hydraulics. The model is a decision-support prototype — never certified, never a
+controller. Nominal equipment magnitudes (e.g. the 2 MW heater) are illustrative values
+chosen to exercise the model, not vendor data.
+
+No random core telemetry.
 
 ---
 
