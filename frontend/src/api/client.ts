@@ -76,3 +76,13 @@ export async function apiPost<T>(path: string, data?: unknown, config?: AxiosReq
   const response = await apiClient.post<ApiEnvelope<T>>(path, data, config)
   return unwrap(response.data)
 }
+
+export async function apiPatch<T>(path: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  const response = await apiClient.patch<ApiEnvelope<T>>(path, data, config)
+  return unwrap(response.data)
+}
+
+/** DELETE returns 204 with an empty body — nothing to unwrap. */
+export async function apiDelete(path: string, config?: AxiosRequestConfig): Promise<void> {
+  await apiClient.delete(path, config)
+}
