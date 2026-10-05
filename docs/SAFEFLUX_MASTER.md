@@ -712,9 +712,15 @@ As of 2026-10-05:
 - **Part 2** (authentication + authorization) complete,
 - **Part 3** (plant setup + configuration) complete,
 - **Part 4** (deterministic process simulator) complete,
-- **Part 5** (safety engine + telemetry) complete.
+- **Part 5** (safety engine + telemetry) complete,
+- **Part 6** (engineering dashboard + visualization) complete — the `/dashboard`, `/plant`
+  and `/monitor` pages read real backend data only, use React Flow with GSAP motion that
+  respects `prefers-reduced-motion` and cleans up on unmount, render the Recharts chart
+  workspace, honour the strict one-viewport rule by width **and** height, and handle
+  loading / empty / API error / expired session / backend offline / telemetry disconnected
+  states explicitly. Backend tests 139 passing; frontend unit tests 46 passing.
 
 ### Next action
 
-Part 6 — Engineering Dashboard + Visualization — then continue the build plan part by part,
+Part 7 — Scenario Engine + Boundary Search — then continue the build plan part by part,
 running Debugging Duck after each part.

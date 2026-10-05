@@ -132,6 +132,33 @@ Protected routes:
 
 Frontend route protection does not replace backend authorization.
 
+### Part 6 frontend modules
+
+Implemented in Part 6 on real backend data only (no fixtures):
+
+```text
+src/layout/viewport.ts        classifyViewport(w,h) -> mobile|tablet|laptop|desktop
+src/layout/useViewport.ts     rAF-throttled live measurement
+src/dashboard/viewState.ts    deriveDashboardView() -> loading|offline|session-expired|error|empty|ready
+src/api/failure.ts            classifyApiFailure() -> offline|session|unknown|null
+src/api/sessionEvents.ts      one central session-expired event
+src/animation/motion.ts       buildMotionPlan() -> pure motion plan from state
+src/animation/useProcessMotion.ts  applies the plan in a gsap.context() (reverted on unmount)
+src/analysis/assessmentStore.ts    in-memory cache of the last backend SafetyAssessment
+src/hooks/useAssessment.ts    reactive views of that cache
+src/components/plant/ProcessGraph.tsx   React Flow graph (Animated)
+src/components/dashboard/{MetricGrid,FindingsPanel}.tsx
+src/components/ui/{StatePanel,StatusBadge,TabBar}.tsx
+```
+
+The dashboard picks a plant, polls `telemetry/current` (5s), and shows the safety state,
+seven metrics (temperature, pressure, feed flow, level, cooling, valve, pump), recent
+findings and analysis status. Live values come from the telemetry frame; when no frame
+exists the configured/initial plant values are shown and explicitly labelled `configured`
+— the UI never fabricates numbers. The safety verdict shown is the one the backend returned
+from `POST /simulations/run`; the frontend caches it in memory (dropped with the tab and on
+sign-out) and computes nothing about safety itself.
+
 ---
 
 ## 5. One-Viewport Layout
@@ -149,6 +176,15 @@ Rules:
 - mobile → one major panel at a time,
 - dialogs remain viewport-safe.
 
+**Implemented (Part 6).** The app shell is pinned to `h-[100dvh]` and the content region is
+`overflow-hidden`, so the document itself never scrolls; each view owns its own bounded
+region. `classifyViewport(width, height)` checks **height as well as width**
+(`width<768` → mobile, `<1200` → tablet, `>=1200` with `height<800` → laptop, else desktop).
+Wide layouts (`laptop`/`desktop`) place the process graph beside the metrics/findings
+column; narrow or short layouts switch the panels behind a `TabBar` so every panel stays
+reachable. On the plant page only the fact grid and the plant list are internal scroll
+regions. Verified for 1920×1080, 1366×768, tablet and mobile portrait.
+
 ---
 
 ## 6. Animation Architecture
@@ -162,7 +198,16 @@ GSAP is used only for meaningful state transitions:
 
 Clean up timelines, prefer transform/opacity, respect reduced motion, avoid decorative infinite animation.
 
-Three.js is optional.
+**Implemented (Part 6).** `buildMotionPlan(input)` is a pure function producing
+`{pipeline: flow|static, rotor: spin|still, pulse: none|warn|crit, flashOnStateChange}` from
+the safety state, pump state and reduced-motion flag. `useProcessMotion` applies it inside
+`gsap.context(..., root)` and calls `ctx.revert()` on unmount, so no timeline leaks; it
+targets named nodes only — the pipeline edge (`strokeDashoffset`), the pump rotor
+(`rotation`), a `[data-sf-pulse]` node (opacity yoyo) and a `[data-sf-state]` flash. Under
+`prefers-reduced-motion` the plan is fully static: no flow, no rotor, no pulse, no flash.
+
+Three.js is optional — it was **not** installed, because a Three.js scene would not add
+genuine value to a 2D P&ID-style diagram.
 
 ---
 
@@ -594,6 +639,12 @@ history, streams new frames, and reconnects with capped backoff; the pure reconn
 logic lives in `frontend/src/telemetry/streamState.ts` and is unit-tested with the Node
 test runner (`frontend/tests/streamState.test.ts`).
 
+The chart workspace (`frontend/src/components/monitor/TelemetryChart.tsx`) is built on
+**Recharts** with switchable Temperature / Pressure / Level / Flow series, near-limit and
+limit `ReferenceLine`s, and the series downsampled to 240 points so a long run stays cheap.
+Animation is disabled because frames already replay one by one and `prefers-reduced-motion`
+must hold without extra configuration.
+
 Future real telemetry adapters remain read-only.
 
 ---
@@ -675,6 +726,15 @@ AI explanations cannot overwrite deterministic values.
 ---
 
 ## 25. Testing
+
+Frontend unit tests (Part 6) cover the pure modules under the Node test runner
+(`frontend/tests/*.test.ts`, run with `npm run test:unit`): viewport classification
+(desktop, short laptop, tablet, mobile, degenerate sizes), dashboard view-state derivation
+(loading/offline/session-expired/error/empty/ready and tone/motion outputs), API failure
+classification, the motion plan (including reduced-motion → fully static), and the
+telemetry stream state machine. Visual/layout states are exercised through these pure
+modules plus `tsc`, `oxlint` and a production build; the environment provides no browser
+frame capture, so no screenshot pass is claimed.
 
 Unit:
 auth utilities, simulator equations, safety, safeguards, scenario validation, boundary search, provider parsing.

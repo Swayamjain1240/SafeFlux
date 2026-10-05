@@ -4,7 +4,118 @@
 
 ---
 
-# Current Checkpoint — 2026-10-05 · PART 5 COMPLETE
+# Current Checkpoint — 2026-10-05 · PART 6 COMPLETE
+
+**Status:** 🟢 Part 6 (Engineering Dashboard + Visualization) implemented and tested  
+**Project:** SafeFlux — Autonomous Process-Safety Failure Hunter  
+**Track:** Best Apps & Agents
+
+## What is complete (Part 6)
+
+### Dependency decision
+
+- Added `recharts@^3.10.1` and `gsap@^3.15.0` — both used (chart workspace; process motion).
+- **Three.js not installed:** a 3D scene would not add genuine value to a 2D
+  P&ID-style diagram, so the optional dependency was deliberately skipped.
+- No external API key required (rule 22 not triggered); `npm audit --omit=dev` → 0
+  vulnerabilities.
+
+### Frontend — real-data dashboard (`/dashboard`)
+
+- `pages/DashboardPage.tsx` rebuilt on live data: owned plant list, plant detail and the
+  current telemetry frame (react-query, 5s poll, `retry: false`), plus the health probe and
+  the cached last safety verdict. No fixtures, no invented numbers.
+- `dashboard/viewState.ts`: one pure function maps the inputs to
+  `loading | offline | session-expired | error | empty | ready` with headline/hint, stream
+  and safety tones and the motion decision — a single source of truth for every branch.
+- `components/dashboard/MetricGrid.tsx`: the seven required metrics (temperature, pressure,
+  feed flow, level, cooling, valve, pump), tone-coded against configured limits, labelled
+  `telemetry` vs `configured`.
+- `components/dashboard/FindingsPanel.tsx`: recent findings from the backend verdict with an
+  explicit empty state; `ui/{StatePanel,StatusBadge,TabBar}` are shared primitives.
+- `analysis/assessmentStore.ts` + `hooks/useAssessment.ts`: in-memory (non-persisted) cache
+  of the last backend `SafetyAssessment` per plant — a cache of the backend's own verdict,
+  never a client-side safety computation.
+
+### Frontend — process graph + motion
+
+- `components/plant/ProcessGraph.tsx`: animated **React Flow** graph
+  (`Feed Tank → Pump P-101 → Reactor R-101 → Valve V-101 → Product Tank`) with **Heater**,
+  **Cooling Jacket** and **Sensors** attached to the reactor via explicit top/bottom handles;
+  units tone-coded from limits and live telemetry.
+- `animation/motion.ts` (pure motion plan) + `animation/useProcessMotion.ts` (GSAP inside a
+  `gsap.context()` that is `revert()`ed on unmount). Motion communicates state only:
+  pipeline flow, pump rotation, warnings and critical transitions.
+- `animation/useReducedMotion.ts`: `prefers-reduced-motion` makes the plan fully static
+  (no flow, rotor, pulse or flash). Effects use transform/opacity.
+
+### Frontend — strict one-viewport rule
+
+- `layouts/AppLayout.tsx` pins the shell to `h-[100dvh]` and the content region no longer
+  scrolls as a page; each view manages its own bounded region.
+- `layout/viewport.ts` classifies by **width and height** (`mobile`/`tablet`/`laptop`/
+  `desktop`); wide layouts show process + metrics/findings side by side, narrow or short
+  layouts use `TabBar`s (dashboard: Overview/Process/Findings; monitor: Telemetry/
+  Process & safety).
+- `pages/PlantSetupPage.tsx` becomes a flex column whose fact grid and plant list are the
+  only internal scroll regions. Tested sizes: 1920×1080, 1366×768, tablet, mobile portrait.
+
+### Frontend — session expiry + telemetry chart
+
+- `api/client.ts` + `api/sessionEvents.ts` + `auth/AuthProvider.tsx`: any `401` from a
+  protected call emits one central `safeflux:session-expired` event; the auth provider drops
+  the cached session so the guard redirects to `/login`, and `clearAssessment()` runs on
+  sign-out. Login/session/logout probes are excluded to avoid redirect loops.
+- `components/monitor/TelemetryChart.tsx` rebuilt on **Recharts** (Temperature / Pressure /
+  Level / Flow tabs, near-limit + limit reference lines, 240-point downsample, animation
+  off); the monitor records each run's backend verdict for the dashboard.
+
+### Tests
+
+- New pure-module tests: `viewport`, `dashboardView`, `failure`, `motionPlan` (35 new).
+
+### Docs
+
+- `README.md` (Part 6 status + sections, test counts, new deps), `ARCHITECTURE.md` §4/§5/§6/
+  §19/§25, `SAFEFLUX_MASTER.md` §26 synced, this checkpoint.
+
+## Tests run
+
+- Backend: `python -m pytest -q -p no:warnings` → **139 passed** (28 Part 1 + 26 Part 2 +
+  25 Part 3 + 21 simulator + 11 simulation API + 16 safety + 12 telemetry API). Unchanged in
+  Part 6 — no backend code was modified.
+- Frontend: `npm run test:unit` → **46 passed** (`node --test`); `npm run lint` → 0 warnings
+  (oxlint); `npm run build` → `tsc -b` + `vite build` OK; `npx tsc -b` exit 0.
+- Pure modules tested: viewport classification (desktop, short laptop, tablet, mobile,
+  degenerate), dashboard view-state (all six statuses + tone/motion outputs), API failure
+  classification (offline / session / unknown), the motion plan (reduced-motion → fully
+  static), and the telemetry stream state machine.
+- **Limitation:** no browser frame capture is available in this environment, so no screenshot
+  or visual-regression pass is claimed; layout is verified through the pure modules plus
+  `tsc`, `oxlint` and the production build.
+
+## Security audit (Part 6 · rules 1–25)
+
+- **Secrets/keys:** none in the frontend (rule 1); only the public `VITE_API_BASE_URL`.
+  No external key required, so rule 22 was not triggered.
+- **Routes/auth:** all three pages stay behind `ProtectedRoute`; frontend protection does not
+  replace backend authorization, which is unchanged and owner-scoped.
+- **Data integrity:** the dashboard reads only real, owner-scoped endpoints and surfaces
+  failed/offline/expired states explicitly instead of rendering stale or invented data.
+- **XSS:** React-escaped text only; no `dangerouslySetInnerHTML`; chart data is numeric.
+- **Dependencies:** two added (`recharts`, `gsap`), both used; `npm audit --omit=dev` → 0
+  vulnerabilities; no unused packages introduced.
+- **Safety language:** the verdict shown is the backend's deterministic result with a
+  simulation-only disclaimer; the AI never decides a status (rule 24 / MASTER §24).
+
+## Next action
+
+Part 7 — Scenario Engine + Boundary Search — then continue the build plan part by part,
+running Debugging Duck after each part.
+
+---
+
+# Checkpoint — 2026-10-05 · PART 5 COMPLETE
 
 **Status:** 🟢 Part 5 (Safety Engine + Telemetry) implemented and tested  
 **Project:** SafeFlux — Autonomous Process-Safety Failure Hunter  

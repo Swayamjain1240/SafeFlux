@@ -15,7 +15,7 @@ equipment** — no PLC/DCS actuation, no real valve or pump control, ever.
 
 ## Status
 
-Build **Part 5 of 10 — safety engine + telemetry** is complete.
+Build **Part 6 of 10 — engineering dashboard + visualization** is complete.
 
 | Area | State |
 | --- | --- |
@@ -35,9 +35,12 @@ Build **Part 5 of 10 — safety engine + telemetry** is complete.
 | Safeguard timing (trigger / response / violation, prevented vs too late) | ✅ |
 | Live simulated telemetry: current / bounded history / SSE stream | ✅ |
 | One-viewport live monitor (telemetry cards + chart tabs) | ✅ |
+| Engineering dashboard on live plant + telemetry data | ✅ |
+| Animated React Flow process graph (GSAP, reduced-motion aware) | ✅ |
+| Central session-expiry handling + one-viewport authenticated pages | ✅ |
 | Backend test suite (pytest) | ✅ 139 passing |
-| Frontend unit tests (node) | ✅ 11 passing |
-| Dashboard / scenario search / AI agent | ⏳ Parts 6–8 |
+| Frontend unit tests (node) | ✅ 46 passing |
+| Scenario search / AI agent | ⏳ Parts 7–8 |
 | Investigation UX / hardening | ⏳ Parts 9–10 |
 
 ---
@@ -98,7 +101,7 @@ python -m pytest -q -p no:warnings # 139 tests
 
 # Frontend (from frontend/)
 npm run lint                       # oxlint, 0 warnings
-npm run test:unit                  # node --test, 11 tests
+npm run test:unit                  # node --test, 46 tests
 npm run build                      # tsc --strict + vite production build
 ```
 
@@ -268,9 +271,57 @@ gated by hard connection limits (total / per plant / per user) before it opens. 
 values and observed sensor values remain separate in every frame.
 
 The monitor page (`/monitor`) is a **one-viewport** workspace: process graph, telemetry
-cards and a dependency-free SVG chart with Temperature / Pressure / Level / Flow tabs. It
-hydrates recent history, streams new frames over SSE, and reconnects with capped backoff;
-on mobile it shows one visualization at a time.
+cards and a **Recharts** chart with Temperature / Pressure / Level / Flow tabs, plus the
+deterministic safety verdict from the last run. It hydrates recent history, streams new
+frames over SSE, and reconnects with capped backoff; on mobile it shows one visualization
+at a time.
+
+## Engineering interface (Part 6)
+
+Three authenticated pages — `/dashboard`, `/plant`, `/monitor` — read **real backend data
+only** (no fixtures): owned plants, plant detail, the current telemetry frame, the health
+probe and the safety verdict returned by `POST /api/v1/simulations/run`.
+
+### Dashboard (`/dashboard`)
+
+Plant selector, safety state, live API/telemetry badges, seven operating metrics
+(**temperature, pressure, feed flow, level, cooling, valve, pump**), the recent **findings**
+from the last deterministic verdict, and an **analysis status** strip. A single pure module
+(`src/dashboard/viewState.ts`) maps the inputs to one of
+`loading | empty | offline | session-expired | error | ready`, so every panel renders from
+one source of truth. Live metrics fall back to configured values (clearly labelled
+`configured`) only when no telemetry frame exists — the page never invents numbers.
+
+### Process graph
+
+`React Flow` diagram of the locked process — `Feed Tank → Pump P-101 → Reactor R-101 →
+Valve V-101 → Product Tank`, with **Heater**, **Cooling Jacket** and **Sensors** attached to
+the reactor. Units are tone-coded from configured limits and live telemetry.
+
+### Motion (GSAP)
+
+Animation communicates state only: pipeline flow, pump rotation, warnings and
+critical transitions. A pure planner (`src/animation/motion.ts`) turns the plant/safety
+state into a motion plan, and `useProcessMotion` applies it inside a `gsap.context()` that is
+reverted on unmount (no leaked timelines). `prefers-reduced-motion` disables all motion, and
+effects prefer `transform`/`opacity`.
+
+### Strict one-viewport rule
+
+Every authenticated page fits inside `100dvh` — the shell pins itself to the viewport and
+the content region never scrolls as a page. `src/layout/viewport.ts` classifies the window
+by **width and height** (`mobile` / `tablet` / `laptop` / `desktop`); wide layouts show all
+panels side by side, while narrow or short viewports switch to **tabbed panels** so no
+button, card or piece of information is clipped or hidden. The plant page keeps only its
+fact grid and plant list as bounded internal scroll regions.
+
+### Session expiry
+
+Any `401` from a protected call emits one central `safeflux:session-expired` event
+(`src/api/sessionEvents.ts`); the auth provider drops the cached session so the route guard
+redirects to `/login`, and the cached assessment is cleared so a previous verdict never
+leaks into the next session. Login/session/logout probes are excluded to avoid redirect
+loops.
 
 ## Security baseline
 
@@ -317,6 +368,17 @@ on mobile it shows one visualization at a time.
 - Strict `extra="forbid"` scenario schemas with bounded fault counts
 - Deterministic physics only — no RNG, no LLM in the numeric path; sensor faults affect
   observed readings, never the true state
+
+### Part 6
+
+- No secrets or keys in the frontend (rule 1) — only the public `VITE_API_BASE_URL`
+- The dashboard reads only real, owner-scoped endpoints; failed/expired/offline states are
+  surfaced explicitly instead of rendering stale or invented data
+- Session expiry is handled centrally from backend `401`s; the frontend still never trusts
+  client-side state for authorization
+- All rendering is React-escaped text — no `dangerouslySetInnerHTML`; chart data is numeric
+- Two dependencies added (`recharts`, `gsap`), both used; `npm audit --omit=dev` → 0
+  vulnerabilities
 
 ### Part 5
 
