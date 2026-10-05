@@ -718,7 +718,9 @@ As of 2026-10-05:
   respects `prefers-reduced-motion` and cleans up on unmount, render the Recharts chart
   workspace, honour the strict one-viewport rule by width **and** height, and handle
   loading / empty / API error / expired session / backend offline / telemetry disconnected
-  states explicitly. Backend tests 139 passing; frontend unit tests 46 passing.
+  states explicitly. The process graph also chooses its own orientation from the container
+  it is given (pure, unit-tested) so it is never present-but-unreadable. Backend tests 139
+  passing; frontend unit tests 51 passing.
 
 ### Next action
 

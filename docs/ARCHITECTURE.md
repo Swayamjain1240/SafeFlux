@@ -138,6 +138,7 @@ Implemented in Part 6 on real backend data only (no fixtures):
 
 ```text
 src/layout/viewport.ts        classifyViewport(w,h) -> mobile|tablet|laptop|desktop
+src/layout/graphLayout.ts     chooseGraphOrientation(w,h) -> horizontal|vertical
 src/layout/useViewport.ts     rAF-throttled live measurement
 src/dashboard/viewState.ts    deriveDashboardView() -> loading|offline|session-expired|error|empty|ready
 src/api/failure.ts            classifyApiFailure() -> offline|session|unknown|null
@@ -183,7 +184,23 @@ region. `classifyViewport(width, height)` checks **height as well as width**
 Wide layouts (`laptop`/`desktop`) place the process graph beside the metrics/findings
 column; narrow or short layouts switch the panels behind a `TabBar` so every panel stays
 reachable. On the plant page only the fact grid and the plant list are internal scroll
-regions. Verified for 1920×1080, 1366×768, tablet and mobile portrait.
+regions.
+
+The graph adds a second, independent decision: `chooseGraphOrientation(width, height)`
+keeps the conventional horizontal P&ID while it still renders at a legible scale and
+rotates it to a vertical spine otherwise, so the five-stage line is never merely present-
+but-unreadable in a tall, narrow box. React Flow's zoom floor sits below the scale the
+layout needs, and a `ResizeObserver` re-fits on resize — without that, a resized window
+keeps a stale transform and clips the outlet units, and the default 0.5 floor alone was
+enough to cut off the valve and product tank at 1366×768. Because React Flow caches each
+node's measured size **on the node object**, the graph is rebuilt only when a displayed
+value changes; rebuilding it on every render makes React Flow re-measure forever and drop
+the edges entirely (which is what happened on the monitor, where every streamed frame
+re-renders the page).
+
+**Verified in a real browser** at 1920×1080, 1366×768, 768×1024 and 390×844, both on load
+and across live resizes: zero page scroll, zero horizontal overflow, and every graph node
+inside its canvas at each size.
 
 ---
 
@@ -205,6 +222,16 @@ the safety state, pump state and reduced-motion flag. `useProcessMotion` applies
 targets named nodes only — the pipeline edge (`strokeDashoffset`), the pump rotor
 (`rotation`), a `[data-sf-pulse]` node (opacity yoyo) and a `[data-sf-state]` flash. Under
 `prefers-reduced-motion` the plan is fully static: no flow, no rotor, no pulse, no flash.
+
+React Flow mounts — and re-mounts — its edge elements after measuring the nodes, and a
+remount discards the inline dash styles GSAP wrote. The pipeline tween is therefore applied
+to whichever main-flow paths are still unstyled, on mount and again on every graph change
+(an observer on the graph subtree, with new tweens registered through `ctx.add`), so the
+flow survives both the initial measurement pass and a layout change. Verified live: the
+four main-flow edges carry an advancing `strokeDashoffset` while telemetry is present, the
+warning pulse yoyos, and the pump rotor stays `transform: none` while the pump is stopped.
+The pipeline is deliberately static when no telemetry exists — a flowing line would claim
+data that is not there.
 
 Three.js is optional — it was **not** installed, because a Three.js scene would not add
 genuine value to a 2D P&ID-style diagram.
@@ -728,13 +755,18 @@ AI explanations cannot overwrite deterministic values.
 ## 25. Testing
 
 Frontend unit tests (Part 6) cover the pure modules under the Node test runner
-(`frontend/tests/*.test.ts`, run with `npm run test:unit`): viewport classification
-(desktop, short laptop, tablet, mobile, degenerate sizes), dashboard view-state derivation
-(loading/offline/session-expired/error/empty/ready and tone/motion outputs), API failure
-classification, the motion plan (including reduced-motion → fully static), and the
-telemetry stream state machine. Visual/layout states are exercised through these pure
-modules plus `tsc`, `oxlint` and a production build; the environment provides no browser
-frame capture, so no screenshot pass is claimed.
+(`frontend/tests/*.test.ts`, run with `npm run test:unit`, 51 tests): viewport classification
+(desktop, short laptop, tablet, mobile, degenerate sizes), graph-orientation choice
+(including that a rotated line really does render larger than the squashed one), dashboard
+view-state derivation (loading/offline/session-expired/error/empty/ready and tone/motion
+outputs), API failure classification, the motion plan (including reduced-motion → fully
+static), and the telemetry stream state machine.
+
+Layout is checked beyond the unit tests by driving the running app in a browser and
+measuring the real DOM at each brief target size: document and `main` scroll heights (must
+be zero), horizontal overflow, every graph node's rect against its canvas, and the applied
+graph transform. That is geometry, not a rendered-image diff — no screenshot or visual-
+regression pass is claimed.
 
 Unit:
 auth utilities, simulator equations, safety, safeguards, scenario validation, boundary search, provider parsing.

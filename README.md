@@ -39,7 +39,7 @@ Build **Part 6 of 10 — engineering dashboard + visualization** is complete.
 | Animated React Flow process graph (GSAP, reduced-motion aware) | ✅ |
 | Central session-expiry handling + one-viewport authenticated pages | ✅ |
 | Backend test suite (pytest) | ✅ 139 passing |
-| Frontend unit tests (node) | ✅ 46 passing |
+| Frontend unit tests (node) | ✅ 51 passing |
 | Scenario search / AI agent | ⏳ Parts 7–8 |
 | Investigation UX / hardening | ⏳ Parts 9–10 |
 
@@ -101,7 +101,7 @@ python -m pytest -q -p no:warnings # 139 tests
 
 # Frontend (from frontend/)
 npm run lint                       # oxlint, 0 warnings
-npm run test:unit                  # node --test, 46 tests
+npm run test:unit                  # node --test, 51 tests
 npm run build                      # tsc --strict + vite production build
 ```
 
@@ -297,6 +297,11 @@ one source of truth. Live metrics fall back to configured values (clearly labell
 `React Flow` diagram of the locked process — `Feed Tank → Pump P-101 → Reactor R-101 →
 Valve V-101 → Product Tank`, with **Heater**, **Cooling Jacket** and **Sensors** attached to
 the reactor. Units are tone-coded from configured limits and live telemetry.
+
+The diagram adapts to the box it is given: it stays horizontal while the whole line still
+fits at a legible scale, and rotates to a vertical spine (`src/layout/graphLayout.ts`, pure
+and unit-tested) when a narrow container would otherwise shrink every label past reading.
+It re-fits on resize, so no unit is ever clipped out of the canvas.
 
 ### Motion (GSAP)
 

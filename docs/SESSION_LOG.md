@@ -70,9 +70,48 @@
   Level / Flow tabs, near-limit + limit reference lines, 240-point downsample, animation
   off); the monitor records each run's backend verdict for the dashboard.
 
+### Live verification (real browser, real backend)
+
+Part 6 was verified end-to-end against a running backend and frontend, not only by unit
+checks: signup → create plant → `simulations/run` → telemetry current/history through the
+API, then the same path through the UI (sign in → dashboard → monitor → run → dashboard).
+The dashboard rendered the smoke plant's real frame (`138.9 °C`, `near limit`) and the
+recorded verdict appeared as `safeguard activated` with its findings; the monitor's verdict
+panel reproduced the backend's safeguard timings exactly.
+
+That pass found and fixed three real defects in the animated P&ID — all of which had still
+passed `tsc`, `oxlint` and the build:
+
+1. **Clipped units.** React Flow clamps zoom at 0.5, so the wide five-stage line could not
+   fit the narrower column of a 1366×768 workspace and the outlet valve and product tank
+   were cut off. Fixed with a lower zoom floor, slightly narrower cards, a wider graph
+   column and a `ResizeObserver` re-fit (a resized window also kept a stale transform).
+2. **Unreadable when fitted.** A horizontal line cannot be read in a tall narrow box, so
+   the orientation is now chosen from the container it is given via a pure, unit-tested
+   `chooseGraphOrientation` (horizontal while it clears a legibility floor, rotated else).
+3. **Missing edges and no flow.** React Flow caches each node's measured size on the node
+   object, so rebuilding nodes every render made it re-measure forever and drop the edges —
+   which is what the monitor did for every streamed frame. Graph inputs are now stabilised
+   on the displayed values, and the pipeline tween is re-applied when React Flow re-mounts
+   its edges (otherwise the flow vanished on a layout change).
+
+Measured after the fixes: 1920×1080, 1366×768, 768×1024 and 390×844 each report zero page
+scroll, zero horizontal overflow and every graph node inside its canvas, on load and across
+live resizes; the four main-flow edges carry an advancing `strokeDashoffset` while
+telemetry is present and the pump rotor stays `none` while the pump is stopped.
+
 ### Tests
 
-- New pure-module tests: `viewport`, `dashboardView`, `failure`, `motionPlan` (35 new).
+- New pure-module tests: `viewport`, `dashboardView`, `failure`, `motionPlan` (35 new) and
+  `graphLayout` (5) — **51 total**.
+
+## Fixes after live verification
+
+- `frontend/src/layout/graphLayout.ts` + `frontend/tests/graphLayout.test.ts` (new).
+- `frontend/src/components/plant/ProcessGraph.tsx`: responsive orientation, zoom floor,
+  resize re-fit, stabilised graph inputs.
+- `frontend/src/animation/useProcessMotion.ts`: pipeline re-applied on edge (re)mount.
+- `frontend/src/pages/DashboardPage.tsx`: graph column is the wider of the two.
 
 ### Docs
 
@@ -84,15 +123,16 @@
 - Backend: `python -m pytest -q -p no:warnings` → **139 passed** (28 Part 1 + 26 Part 2 +
   25 Part 3 + 21 simulator + 11 simulation API + 16 safety + 12 telemetry API). Unchanged in
   Part 6 — no backend code was modified.
-- Frontend: `npm run test:unit` → **46 passed** (`node --test`); `npm run lint` → 0 warnings
+- Frontend: `npm run test:unit` → **51 passed** (`node --test`); `npm run lint` → 0 warnings
   (oxlint); `npm run build` → `tsc -b` + `vite build` OK; `npx tsc -b` exit 0.
 - Pure modules tested: viewport classification (desktop, short laptop, tablet, mobile,
-  degenerate), dashboard view-state (all six statuses + tone/motion outputs), API failure
+  degenerate), graph orientation (including that a rotated line renders larger than the
+  squashed one), dashboard view-state (all six statuses + tone/motion outputs), API failure
   classification (offline / session / unknown), the motion plan (reduced-motion → fully
   static), and the telemetry stream state machine.
-- **Limitation:** no browser frame capture is available in this environment, so no screenshot
-  or visual-regression pass is claimed; layout is verified through the pure modules plus
-  `tsc`, `oxlint` and the production build.
+- **Layout verified by DOM geometry in a real browser** at 1920×1080, 1366×768, 768×1024 and
+  390×844 (scroll heights, overflow, node rects, applied transform). This is measurement,
+  not an image diff — no screenshot or visual-regression pass is claimed.
 
 ## Security audit (Part 6 · rules 1–25)
 
@@ -104,7 +144,8 @@
   failed/offline/expired states explicitly instead of rendering stale or invented data.
 - **XSS:** React-escaped text only; no `dangerouslySetInnerHTML`; chart data is numeric.
 - **Dependencies:** two added (`recharts`, `gsap`), both used; `npm audit --omit=dev` → 0
-  vulnerabilities; no unused packages introduced.
+  vulnerabilities; no unused packages introduced. Live verification used a local smoke
+  account and plant in a gitignored SQLite DB, and no external service was called.
 - **Safety language:** the verdict shown is the backend's deterministic result with a
   simulation-only disclaimer; the AI never decides a status (rule 24 / MASTER §24).
 
