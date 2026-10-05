@@ -1,4 +1,4 @@
-import { memo, useMemo, useRef } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Background,
   Controls,
@@ -8,10 +8,12 @@ import {
   type Edge,
   type Node,
   type NodeProps,
+  type ReactFlowInstance,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useProcessMotion } from '../../animation/useProcessMotion'
 import type { SafetyStatus } from '../../animation/motion'
+import { chooseGraphOrientation, type GraphOrientation } from '../../layout/graphLayout'
 import type { PlantDetail } from '../../types/plant'
 
 /**
@@ -70,9 +72,22 @@ const PULSE_TONE: Record<Tone, string> = {
   idle: 'border-slate-600',
 }
 
+// Narrower cards and a shorter pitch keep the whole line legible when it has to
+// share a two-column workspace (e.g. 1366×768) instead of being clipped.
+const NODE_WIDTH = 'w-40'
+const X_STEP = 200
+
+/**
+ * The five-stage line is wide (≈960px), so a half-width workspace column needs
+ * a scale below React Flow's default 0.5 floor to fit. Allow it — being clipped
+ * is worse than being small, and the zoom controls are always available.
+ */
+const MIN_ZOOM = 0.28
+const FIT_VIEW = { padding: 0.1, minZoom: MIN_ZOOM } as const
+
 const UnitNodeComponent = memo(function UnitNodeComponent({ data }: NodeProps<UnitNode>) {
   return (
-    <div className="relative w-44">
+    <div className={`relative ${NODE_WIDTH}`}>
       {/* Explicit handle ids so the utility edges (heater/cooling/sensors)
           can attach to the top/bottom while the process line uses left/right. */}
       <Handle type="target" id="left" position={Position.Left} className="!bg-cyan-500/80" />
@@ -118,12 +133,56 @@ function clampTone(pumpRunning: boolean, value: number | undefined, limit: numbe
   return 'ok'
 }
 
+/**
+ * Node coordinates per orientation. The process line is wide and short, so in a
+ * tall/narrow box (tablet, mobile, or a squeezed desktop column) laying it
+ * vertically lets React Flow render it far closer to native size instead of
+ * shrinking every label past legibility.
+ */
+function layoutFor(orientation: GraphOrientation): {
+  feed: [number, number]
+  pump: [number, number]
+  reactor: [number, number]
+  valve: [number, number]
+  product: [number, number]
+  heater: [number, number]
+  cooling: [number, number]
+  sensors: [number, number]
+} {
+  if (orientation === 'vertical') {
+    const y = (index: number) => index * 180
+    return {
+      feed: [0, y(0)],
+      pump: [0, y(1)],
+      reactor: [0, y(2)],
+      valve: [0, y(3)],
+      product: [0, y(4)],
+      sensors: [260, y(1)],
+      heater: [260, y(2)],
+      cooling: [260, y(3)],
+    }
+  }
+  const x = (index: number) => index * X_STEP
+  return {
+    feed: [0, 70],
+    pump: [x(1), 70],
+    reactor: [x(2), 70],
+    valve: [x(3), 70],
+    product: [x(4), 70],
+    heater: [x(1.4), -80],
+    cooling: [x(2.6), -80],
+    sensors: [x(2.6), 220],
+  }
+}
+
 function buildGraph(
   plant: PlantDetail,
   values: ProcessSnapshot,
   safetyStatus: SafetyStatus,
+  orientation: GraphOrientation,
 ): { nodes: UnitNode[]; edges: Edge[] } {
   const { config, safety_limits: limits } = plant
+  const at = layoutFor(orientation)
   const pumpRunning = values.pump_running
   const reactorTone: Tone =
     safetyStatus === 'violation' ? 'crit' : safetyStatus === 'safe' ? 'ok' : safetyStatus === 'unknown' ? 'idle' : 'warn'
@@ -132,7 +191,7 @@ function buildGraph(
     {
       id: 'feed',
       type: 'unit',
-      position: { x: 0, y: 70 },
+      position: { x: at.feed[0], y: at.feed[1] },
       data: {
         title: 'Feed Tank',
         subtitle: 'Raw feed',
@@ -143,7 +202,7 @@ function buildGraph(
     {
       id: 'pump',
       type: 'unit',
-      position: { x: 250, y: 70 },
+      position: { x: at.pump[0], y: at.pump[1] },
       data: {
         title: 'Pump P-101',
         subtitle: 'Feed pump',
@@ -155,7 +214,7 @@ function buildGraph(
     {
       id: 'reactor',
       type: 'unit',
-      position: { x: 500, y: 70 },
+      position: { x: at.reactor[0], y: at.reactor[1] },
       data: {
         title: 'Heated Reactor R-101',
         subtitle: 'Heater · Cooling · Sensors',
@@ -168,7 +227,7 @@ function buildGraph(
     {
       id: 'valve',
       type: 'unit',
-      position: { x: 750, y: 70 },
+      position: { x: at.valve[0], y: at.valve[1] },
       data: {
         title: 'Outlet Valve V-101',
         subtitle: 'Discharge control',
@@ -179,7 +238,7 @@ function buildGraph(
     {
       id: 'product',
       type: 'unit',
-      position: { x: 1000, y: 70 },
+      position: { x: at.product[0], y: at.product[1] },
       data: {
         title: 'Product Tank',
         subtitle: 'Discharge',
@@ -190,7 +249,7 @@ function buildGraph(
     {
       id: 'heater',
       type: 'unit',
-      position: { x: 330, y: -70 },
+      position: { x: at.heater[0], y: at.heater[1] },
       data: {
         title: 'Heater',
         subtitle: 'Heating',
@@ -201,7 +260,7 @@ function buildGraph(
     {
       id: 'cooling',
       type: 'unit',
-      position: { x: 600, y: -70 },
+      position: { x: at.cooling[0], y: at.cooling[1] },
       data: {
         title: 'Cooling Jacket',
         subtitle: 'Cooling',
@@ -212,7 +271,7 @@ function buildGraph(
     {
       id: 'sensors',
       type: 'unit',
-      position: { x: 600, y: 220 },
+      position: { x: at.sensors[0], y: at.sensors[1] },
       data: {
         title: 'Sensors',
         subtitle: 'T · P · L',
@@ -222,14 +281,22 @@ function buildGraph(
     },
   ]
 
+  // The spine always follows the flow direction; the three reactor utilities
+  // hang off the opposite axis (above/below when horizontal, right when not).
+  const [spineOut, spineIn] = orientation === 'vertical' ? ['bottom', 'top'] : ['right', 'left']
+  const utilityHandles =
+    orientation === 'vertical'
+      ? { sourceHandle: 'right', targetHandle: 'left' }
+      : { sourceHandle: 'bottom', targetHandle: 'top' }
+
   const edges: Edge[] = [
-    { id: 'e-feed-pump', source: 'feed', target: 'pump', sourceHandle: 'right', targetHandle: 'left', className: 'sf-flow-main' },
-    { id: 'e-pump-reactor', source: 'pump', target: 'reactor', sourceHandle: 'right', targetHandle: 'left', className: 'sf-flow-main' },
-    { id: 'e-reactor-valve', source: 'reactor', target: 'valve', sourceHandle: 'right', targetHandle: 'left', className: 'sf-flow-main' },
-    { id: 'e-valve-product', source: 'valve', target: 'product', sourceHandle: 'right', targetHandle: 'left', className: 'sf-flow-main' },
-    { id: 'e-heater-reactor', source: 'heater', target: 'reactor', sourceHandle: 'bottom', targetHandle: 'top', animated: false },
-    { id: 'e-cooling-reactor', source: 'cooling', target: 'reactor', sourceHandle: 'bottom', targetHandle: 'top', animated: false },
-    { id: 'e-reactor-sensors', source: 'reactor', target: 'sensors', sourceHandle: 'bottom', targetHandle: 'top', animated: false },
+    { id: 'e-feed-pump', source: 'feed', target: 'pump', sourceHandle: spineOut, targetHandle: spineIn, className: 'sf-flow-main' },
+    { id: 'e-pump-reactor', source: 'pump', target: 'reactor', sourceHandle: spineOut, targetHandle: spineIn, className: 'sf-flow-main' },
+    { id: 'e-reactor-valve', source: 'reactor', target: 'valve', sourceHandle: spineOut, targetHandle: spineIn, className: 'sf-flow-main' },
+    { id: 'e-valve-product', source: 'valve', target: 'product', sourceHandle: spineOut, targetHandle: spineIn, className: 'sf-flow-main' },
+    { id: 'e-heater-reactor', source: 'heater', target: 'reactor', ...utilityHandles, animated: false },
+    { id: 'e-cooling-reactor', source: 'cooling', target: 'reactor', ...utilityHandles, animated: false },
+    { id: 'e-reactor-sensors', source: 'reactor', target: 'sensors', ...utilityHandles, animated: false },
   ]
 
   return { nodes, edges }
@@ -251,14 +318,84 @@ export function ProcessGraph({
   className = '',
 }: ProcessGraphProps) {
   const container = useRef<HTMLDivElement | null>(null)
-  const { nodes, edges } = useMemo(() => buildGraph(plant, values, safetyStatus), [plant, values, safetyStatus])
+  const [orientation, setOrientation] = useState<GraphOrientation>('horizontal')
+
+  // React Flow caches each node's measured size on the node object, so handing
+  // it brand-new objects on every render makes it re-measure forever — and an
+  // unmeasured node renders no edges. The monitor re-renders for every streamed
+  // frame, so the graph is rebuilt only when a displayed number actually
+  // changes, which keeps the node objects (and therefore the edges) stable.
+  const {
+    temperature_c,
+    pressure_bar,
+    level_pct,
+    feed_flow_lpm,
+    outlet_flow_lpm,
+    pump_running,
+  } = values
+  const snapshot = useMemo<ProcessSnapshot>(
+    () => ({
+      temperature_c,
+      pressure_bar,
+      level_pct,
+      feed_flow_lpm,
+      outlet_flow_lpm,
+      pump_running,
+    }),
+    [temperature_c, pressure_bar, level_pct, feed_flow_lpm, outlet_flow_lpm, pump_running],
+  )
+
+  const { nodes, edges } = useMemo(
+    () => buildGraph(plant, snapshot, safetyStatus, orientation),
+    [plant, snapshot, safetyStatus, orientation],
+  )
+  // React Flow renders edges only after it has measured the nodes, so motion
+  // waits for `onInit` instead of starting against (or missing) absent paths.
+  const [edgesReady, setEdgesReady] = useState(false)
+  const flow = useRef<ReactFlowInstance<UnitNode, Edge> | null>(null)
+  const handleInit = useCallback((instance: ReactFlowInstance<UnitNode, Edge>) => {
+    flow.current = instance
+    instance.fitView(FIT_VIEW)
+    setEdgesReady(true)
+  }, [])
+
+  // Pick the orientation from the box we are actually given, then keep it in
+  // step with resizes: a window/panel change alters the container but React Flow
+  // keeps its old transform, which would push the outlet nodes outside the
+  // clipped canvas. Re-fitting keeps the whole P&ID visible (never a clipped card).
+  useEffect(() => {
+    const element = container.current
+    if (!element || typeof ResizeObserver === 'undefined') return
+    let frame = 0
+    const observer = new ResizeObserver((entries) => {
+      const box = entries[0]?.contentRect
+      if (!box) return
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        setOrientation(chooseGraphOrientation(box.width, box.height))
+        flow.current?.fitView(FIT_VIEW)
+      })
+    })
+    observer.observe(element)
+    return () => {
+      observer.disconnect()
+      cancelAnimationFrame(frame)
+    }
+  }, [])
+
+  // Re-fit after a layout change commits, so the new coordinates are fitted too.
+  useEffect(() => {
+    if (edgesReady) flow.current?.fitView(FIT_VIEW)
+  }, [orientation, edgesReady])
 
   useProcessMotion(container, {
     reducedMotion,
     hasTelemetry: safetyStatus !== 'unknown',
-    pumpRunning: values.pump_running,
+    pumpRunning: pump_running,
     safetyStatus,
     stateKey: safetyStatus,
+    edgesReady,
+    graphKey: orientation,
   })
 
   return (
@@ -270,8 +407,10 @@ export function ProcessGraph({
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        onInit={handleInit}
         fitView
-        fitViewOptions={{ padding: 0.18 }}
+        minZoom={MIN_ZOOM}
+        fitViewOptions={FIT_VIEW}
         proOptions={{ hideAttribution: true }}
         nodesDraggable={false}
         nodesConnectable={false}

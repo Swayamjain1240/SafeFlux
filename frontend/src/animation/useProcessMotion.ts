@@ -2,7 +2,21 @@ import { useEffect, useMemo, type RefObject } from 'react'
 import { gsap } from 'gsap'
 import { buildMotionPlan, type MotionInput, type MotionPlan } from './motion'
 
-type MotionProps = Omit<MotionInput, 'stateKey'> & { stateKey: string }
+type MotionProps = Omit<MotionInput, 'stateKey'> & {
+  stateKey: string
+  /**
+   * React Flow mounts its edge paths only after nodes are measured, so the
+   * first effect pass sees no edges. The graph flips this once the flow has
+   * initialised; without it the pipeline tween would silently never start.
+   */
+  edgesReady: boolean
+  /**
+   * Changes whenever the graph is rebuilt (e.g. the layout switches between the
+   * horizontal and vertical P&ID). React Flow recreates its edge elements then,
+   * which discards the inline dash styles, so the plan must be re-applied.
+   */
+  graphKey: string
+}
 
 const SELECTOR = {
   pipeline: '.sf-flow-main .react-flow__edge-path',
@@ -32,7 +46,8 @@ export function useProcessMotion(
   container: RefObject<HTMLElement | null>,
   props: MotionProps,
 ): void {
-  const { reducedMotion, hasTelemetry, pumpRunning, safetyStatus, stateKey } = props
+  const { reducedMotion, hasTelemetry, pumpRunning, safetyStatus, stateKey, edgesReady, graphKey } =
+    props
 
   const plan: MotionPlan = useMemo(
     () => buildMotionPlan({ reducedMotion, hasTelemetry, pumpRunning, safetyStatus, stateKey }),
@@ -46,17 +61,26 @@ export function useProcessMotion(
       plan.rotor === 'still' &&
       plan.pulse === 'none' &&
       !plan.flashOnStateChange
-    if (!root || inert) return
+    if (!root || !edgesReady || inert) return
+
+    // React Flow measures nodes first and only then mounts edge paths — and it
+    // re-mounts them whenever the graph is re-laid out, which discards the
+    // inline dash styles GSAP wrote. So instead of a one-shot pass we apply the
+    // flow to whichever main-flow paths are still unstyled, on mount and on
+    // every subsequent graph change. Tweens are registered on `ctx`, so
+    // `ctx.revert()` stays authoritative over everything created here.
+    let pipelineFrame = 0
+
+    const applyPipeline = () => {
+      const fresh = list<SVGPathElement>(root, SELECTOR.pipeline).filter(
+        (path) => !path.style.strokeDasharray,
+      )
+      if (fresh.length === 0) return
+      gsap.set(fresh, { strokeDasharray: '7 11' })
+      gsap.to(fresh, { strokeDashoffset: -36, duration: 1.7, ease: 'none', repeat: -1 })
+    }
 
     const ctx = gsap.context(() => {
-      if (plan.pipeline === 'flow') {
-        const paths = list<SVGPathElement>(root, SELECTOR.pipeline)
-        if (paths.length > 0) {
-          gsap.set(paths, { strokeDasharray: '7 11' })
-          gsap.to(paths, { strokeDashoffset: -36, duration: 1.7, ease: 'none', repeat: -1 })
-        }
-      }
-
       if (plan.rotor === 'spin') {
         const rotors = list<HTMLElement>(root, SELECTOR.rotor)
         if (rotors.length > 0) {
@@ -103,6 +127,20 @@ export function useProcessMotion(
       }
     }, root)
 
-    return () => ctx.revert()
-  }, [container, plan])
+    let observer: MutationObserver | null = null
+    if (plan.pipeline === 'flow') {
+      ctx.add(applyPipeline)
+      observer = new MutationObserver(() => {
+        cancelAnimationFrame(pipelineFrame)
+        pipelineFrame = requestAnimationFrame(() => ctx.add(applyPipeline))
+      })
+      observer.observe(root, { childList: true, subtree: true })
+    }
+
+    return () => {
+      observer?.disconnect()
+      cancelAnimationFrame(pipelineFrame)
+      ctx.revert()
+    }
+  }, [container, plan, edgesReady, graphKey])
 }

@@ -260,8 +260,10 @@ export default function DashboardPage() {
         <TabBar tabs={TAB_ITEMS} active={tab} onChange={setTab} label="Dashboard panels" />
       )}
 
+      {/* The process graph gets the wider column so the full line stays
+          readable at the narrow end of the wide layout (e.g. 1366×768). */}
       {wide ? (
-        <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-2">
+        <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
           <div className="min-h-0">{processPanel}</div>
           <div className="flex min-h-0 min-w-0 flex-col gap-3">
             <div className="min-h-0 shrink-0">{metricsPanel}</div>
