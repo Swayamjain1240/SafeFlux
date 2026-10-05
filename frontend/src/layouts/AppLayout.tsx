@@ -39,7 +39,7 @@ export default function AppLayout() {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="flex h-[100dvh] flex-col overflow-hidden">
       <header className="flex h-12 shrink-0 items-center justify-between border-b border-slate-800 bg-slate-900/70 pr-2 pl-3">
         <div className="flex items-center gap-3">
           <Logo to="/dashboard" compact />
@@ -95,7 +95,9 @@ export default function AppLayout() {
             ))}
           </nav>
 
-          <main className="min-h-0 flex-1 overflow-y-auto p-4">
+          {/* One-viewport rule: the content region never scrolls as a page.
+              Each view manages its own internal, bounded scrolling instead. */}
+          <main className="min-h-0 flex-1 overflow-hidden p-4">
             <Outlet />
           </main>
         </div>

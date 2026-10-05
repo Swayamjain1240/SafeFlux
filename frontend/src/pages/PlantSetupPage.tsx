@@ -66,7 +66,7 @@ function PlantDetailView({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="flex h-full min-h-0 flex-col gap-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h2 className="text-base font-semibold text-white">{plant.name}</h2>
@@ -93,9 +93,11 @@ function PlantDetailView({
 
       {plant.description && <p className="text-sm text-slate-400">{plant.description}</p>}
 
-      <ProcessTopology plant={plant} />
+      <div className="shrink-0">
+        <ProcessTopology plant={plant} />
+      </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+      <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3 lg:grid-cols-4">
         <Fact label="Feed flow" value={`${plant.config.feed_flow_lpm} L/min`} />
         <Fact label="Cooling" value={`${plant.config.cooling_pct}%`} />
         <Fact label="Valve" value={`${plant.config.valve_position_pct}%`} />
@@ -202,7 +204,7 @@ export default function PlantSetupPage() {
   const plants = list.data?.plants ?? []
 
   return (
-    <div className="space-y-4">
+    <div className="flex h-full min-h-0 flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h1 className="text-lg font-semibold text-white">Plant setup</h1>
@@ -231,7 +233,7 @@ export default function PlantSetupPage() {
       )}
 
       {plants.length > 0 && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-1 gap-3 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
           {plants.map((plant) => (
             <PlantCard key={plant.id} plant={plant} onSelect={() => openPlant(plant.id)} />
           ))}
