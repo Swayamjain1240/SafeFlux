@@ -4,7 +4,103 @@
 
 ---
 
-# Current Checkpoint — 2026-10-04 · PART 4 COMPLETE
+# Current Checkpoint — 2026-10-05 · PART 5 COMPLETE
+
+**Status:** 🟢 Part 5 (Safety Engine + Telemetry) implemented and tested  
+**Project:** SafeFlux — Autonomous Process-Safety Failure Hunter  
+**Track:** Best Apps & Agents
+
+## What is complete (Part 5)
+
+### Backend — safety engine (`app/safety/`)
+
+- **Statuses + thresholds** (`findings.py`, `constants.py`): `SafetyStatus`
+  (SAFE / NEAR_LIMIT / SAFEGUARD_ACTIVATED / VIOLATION), a configurable near-limit band
+  (default 0.9, clamped 0.5–1.0), `SafetyFinding` (type, status, severity, timestamp,
+  measured value, limit, near-limit, scenario id) and `SafetyAssessment` roll-up.
+- **Classifier** (`evaluator.py`): reads simulator series + events and classifies each of
+  temperature / pressure / level. Actual exceedance → VIOLATION; a trip kept within limit by
+  the applied guard → SAFEGUARD_ACTIVATED; near-limit band → NEAR_LIMIT; else SAFE.
+- **Safeguard timing** (`safeguards.py`): per high alarm and the emergency shutdown, records
+  trigger / response / violation times and whether the modelled response *prevented* the
+  violation or was *too late*.
+- **Alarm-driven assessment** (`assess.py`): the shutdown is assessed with its trip driven
+  by the high-alarm setpoint (`near_limit_fraction · limit`) via a new default-1.0
+  `SafeguardSettings.trip_fraction` on the simulator, so prevention is physically
+  reachable; a too-long delay still reports *too late*.
+- **Integration** (`app/api/routes/simulations.py`): `POST /simulations/run` now returns
+  `{result, safety}` and feeds telemetry; the near-limit fraction is per-request or
+  `SAFETY_NEAR_LIMIT_FRACTION`.
+
+### Backend — telemetry (`app/telemetry/`, `app/api/routes/telemetry.py`)
+
+- **Frames + bounded store** (`frames.py`, `store.py`): one `TelemetryFrame` per sample
+  (true values vs observed sensor values kept separate), a cheap per-frame status from the
+  near-limit band, and a thread-safe `CurrentStateStore` retaining only the latest frame
+  plus a bounded per-plant history under a bounded plant count.
+- **Service** (`service.py`): ingests a result and replays stored frames; counts every
+  stream connection against total / per-plant / per-user limits and releases the slot in a
+  `finally`.
+- **Routes**: `GET .../telemetry/current`, `GET .../telemetry/history?limit=`, and
+  `GET .../telemetry/stream` (SSE, finite deterministic replay ending in `complete`), all
+  authenticated and owner-scoped with bounded history and pre-open connection limits.
+- **Config** (`config.py`, `.env.example`): `SAFETY_NEAR_LIMIT_FRACTION`, `TELEMETRY_*`
+  budgets and replay pacing knobs.
+
+### Frontend
+
+- **Live monitor** (`pages/MonitorPage.tsx`): one-viewport layout with plant/scenario
+  selectors, deterministic safety verdict panel, process graph, telemetry cards and a
+  dependency-free SVG chart with Temperature / Pressure / Level / Flow tabs.
+- **Streaming** (`hooks/useTelemetry.ts`, `api/telemetry.ts`): hydrates bounded history then
+  streams SSE frames, reconnecting with capped backoff.
+- **Pure state machine** (`telemetry/streamState.ts`): frame merge by sequence (reconnect
+  dedupe), bounded retention, lifecycle + backoff — unit-tested with the Node runner.
+
+### Docs
+
+- `README.md` (status, Part 5 sections, security baseline), `ARCHITECTURE.md` §13/§18/§19,
+  `SAFEFLUX_MASTER.md` §26 synced, this checkpoint.
+
+## Tests run
+
+- Backend: `python -m pytest -q -p no:warnings` → **139 passed** (28 Part 1 + 26 Part 2 +
+  25 Part 3 + 21 simulator + 11 simulation API + 16 safety + 12 telemetry API).
+- Safety tests assert status and direction (weaker cooling is never classified safer), the
+  configurable near-limit band, evidence fields, the worst-status roll-up, and safeguard
+  timing where an early shutdown prevents the violation and a late one reports it.
+- Telemetry tests cover current/history reads, bounded limits/retention, SSE replay
+  completion, unauthenticated (401) and cross-user (404) access, the per-plant connection
+  limit (429), and slot release on completion and early disconnect.
+- Frontend: `npm run test:unit` → **11 passed**; `npm run lint` → 0 warnings;
+  `npm run build` → tsc + vite OK.
+
+## Security audit (Part 5 · rules 1–25)
+
+- **Secrets:** no new external API key (rule 22 not triggered); `*.db`/`.env` still
+  gitignored and the smoke DB was removed.
+- **Access control:** telemetry current/history/stream all require a session and load the
+  plant via `get_owned_or_404`; cross-user access returns 404 (tested).
+- **Abuse/DoS:** SSE connections are hard-limited before opening (429 + Retry-After), the
+  history window is bounded per plant and per query, and no request can grow memory
+  unboundedly.
+- **Input/XSS:** query limits bounded server-side; the frontend renders escaped text and
+  uses no `dangerouslySetInnerHTML`; chart data is numeric only.
+- **Determinism:** safety statuses and telemetry are computed by deterministic software; no
+  RNG, and no LLM call per tick.
+- **Dependencies:** none added — the chart is plain SVG and the unit tests use the Node test
+  runner.
+- **Safety language:** verdicts carry a simulation-only disclaimer and are never a claim
+  about a real plant (rule 24 / MASTER §24).
+
+## Next action
+
+Part 6 — Engineering Dashboard + Visualization — then continue the build plan part by part,
+running Debugging Duck after each part.
+
+---
+
+# Checkpoint — 2026-10-04 · PART 4 COMPLETE
 
 **Status:** 🟢 Part 4 (Deterministic Process Simulator) implemented and tested  
 **Project:** SafeFlux — Autonomous Process-Safety Failure Hunter  

@@ -15,7 +15,7 @@ equipment** — no PLC/DCS actuation, no real valve or pump control, ever.
 
 ## Status
 
-Build **Part 4 of 10 — deterministic process simulator** is complete.
+Build **Part 5 of 10 — safety engine + telemetry** is complete.
 
 | Area | State |
 | --- | --- |
@@ -31,8 +31,13 @@ Build **Part 4 of 10 — deterministic process simulator** is complete.
 | Viewport-safe 5-step plant wizard + React Flow topology preview | ✅ |
 | Deterministic simulator (NumPy/SciPy) + fault injection | ✅ |
 | Authenticated `POST /api/v1/simulations/run` with compute budgets | ✅ |
-| Backend test suite (pytest) | ✅ 111 passing |
-| Safety engine / dashboard / search / AI agent | ⏳ Parts 5–8 |
+| Deterministic safety engine (SAFE/NEAR_LIMIT/SAFEGUARD_ACTIVATED/VIOLATION) | ✅ |
+| Safeguard timing (trigger / response / violation, prevented vs too late) | ✅ |
+| Live simulated telemetry: current / bounded history / SSE stream | ✅ |
+| One-viewport live monitor (telemetry cards + chart tabs) | ✅ |
+| Backend test suite (pytest) | ✅ 139 passing |
+| Frontend unit tests (node) | ✅ 11 passing |
+| Dashboard / scenario search / AI agent | ⏳ Parts 6–8 |
 | Investigation UX / hardening | ⏳ Parts 9–10 |
 
 ---
@@ -89,10 +94,11 @@ npm run dev                        # http://localhost:5173
 
 ```bash
 # Backend (from Backend/)
-python -m pytest                   # 54 tests
+python -m pytest -q -p no:warnings # 139 tests
 
 # Frontend (from frontend/)
 npm run lint                       # oxlint, 0 warnings
+npm run test:unit                  # node --test, 11 tests
 npm run build                      # tsc --strict + vite production build
 ```
 
@@ -111,6 +117,12 @@ npm run build                      # tsc --strict + vite production build
 | `SESSION_TTL_MINUTES` | no (1440) | session cookie / JWT lifetime (5..43200) |
 | `AUTH_RATE_LIMIT_ATTEMPTS` / `AUTH_RATE_LIMIT_WINDOW_SECONDS` | no | tighter signup/login rate limit |
 | `MAX_REQUEST_BODY_BYTES` | no (65536) | reject oversized request bodies (≥1024) |
+| `SIM_MAX_DURATION_S` / `SIM_MIN_TIME_STEP_S` / `SIM_MAX_SAMPLES` | no | hard simulation compute budgets |
+| `SIM_RATE_LIMIT_RUNS` / `SIM_RATE_LIMIT_WINDOW_SECONDS` | no | simulation per-IP rate limit |
+| `SAFETY_NEAR_LIMIT_FRACTION` | no (0.9) | near-limit band / alarm setpoint as a fraction of each limit |
+| `TELEMETRY_MAX_HISTORY` / `TELEMETRY_MAX_PLANTS` | no | retained frames per plant / plants per process |
+| `TELEMETRY_MAX_STREAMS[_PER_PLANT|_PER_USER]` | no | concurrent SSE stream limits |
+| `TELEMETRY_REPLAY_INTERVAL_MS` / `TELEMETRY_HISTORY_DEFAULT_LIMIT` | no | stream pacing / default history size |
 | `NEBIUS_API_KEY` / `NEBIUS_BASE_URL` / `NEBIUS_MODEL` | Part 8 | AI provider — **backend only** |
 
 ### Frontend (`frontend/.env.example`)
@@ -221,6 +233,45 @@ rate-limit bucket (`SIM_RATE_LIMIT_RUNS`) and the existing request body-size gua
 The model is a simplified decision-support prototype for *simulated* behaviour. It is
 **not** certified industrial safety software and never drives real equipment.
 
+## Safety engine (Part 5)
+
+Every `POST /api/v1/simulations/run` now also returns a deterministic `safety` verdict.
+The engine is pure numeric software — **no LLM decides a safety status**.
+
+Statuses: **SAFE**, **NEAR_LIMIT**, **SAFEGUARD_ACTIVATED**, **VIOLATION**. Each monitored
+variable (temperature, pressure, level) produces a `SafetyFinding` recording its type,
+timestamp, measured value, configured limit, near-limit band and scenario id. The
+near-limit band is configurable (`SAFETY_NEAR_LIMIT_FRACTION`, default 0.9, or per request).
+
+**Safeguard timing** records, for each high alarm and the emergency shutdown, the
+**trigger**, **response** and **violation** times and whether the modelled response
+*prevented* the violation in the tested simulation or was *too late*. To make that verdict
+meaningful, the shutdown is assessed with its trip driven by the high-alarm setpoint
+(near-limit) so a short delay can prevent a violation while a long delay still reports
+too late. Verdicts are **simulation-only** and never a claim about a real plant
+(see [docs/SAFEFLUX_MASTER.md](docs/SAFEFLUX_MASTER.md) §24).
+
+## Live telemetry (Part 5)
+
+Architecture: `Simulator → TelemetryService → CurrentStateStore → SSE/API → Frontend`.
+**No LLM is called per telemetry tick.**
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/v1/plants/{id}/telemetry/current` | latest telemetry frame |
+| `GET` | `/api/v1/plants/{id}/telemetry/history?limit=` | recent bounded history |
+| `GET` | `/api/v1/plants/{id}/telemetry/stream` | SSE replay of the stored frames |
+
+Every route requires a session and resolves the plant with `get_owned_or_404` (cross-user →
+**404**). History is bounded server-side per plant and per query, and each SSE stream is
+gated by hard connection limits (total / per plant / per user) before it opens. True process
+values and observed sensor values remain separate in every frame.
+
+The monitor page (`/monitor`) is a **one-viewport** workspace: process graph, telemetry
+cards and a dependency-free SVG chart with Temperature / Pressure / Level / Flow tabs. It
+hydrates recent history, streams new frames over SSE, and reconnects with capped backoff;
+on mobile it shows one visualization at a time.
+
 ## Security baseline
 
 ### Part 1
@@ -266,6 +317,19 @@ The model is a simplified decision-support prototype for *simulated* behaviour. 
 - Strict `extra="forbid"` scenario schemas with bounded fault counts
 - Deterministic physics only — no RNG, no LLM in the numeric path; sensor faults affect
   observed readings, never the true state
+
+### Part 5
+
+- Safety statuses are computed by deterministic software; the LLM never determines
+  threshold truth
+- Telemetry current/history/stream routes are authenticated **and** owner-scoped; a
+  cross-user plant returns **404** rather than leaking existence
+- SSE connections are hard-limited (total / per plant / per user) and the slot is always
+  released on completion or client disconnect
+- Query and history limits are bounded server-side; frames expose only simulated values,
+  limits and status — never owner ids or internals
+- Streams replay deterministic simulator output only; nothing is routed through the LLM
+  per tick, and SafeFlux still exposes no actuation path
 
 ## Documentation
 

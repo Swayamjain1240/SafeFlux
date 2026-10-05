@@ -351,6 +351,11 @@ Implemented in Part 4: `simulation_rate_limit(request)` gives the expensive
 hard simulation compute budgets. Endpoint-specific budgets for AI/search arrive with
 their features.
 
+Implemented in Part 5: telemetry **SSE stream connections** are capped by
+`TELEMETRY_MAX_STREAMS` / `TELEMETRY_MAX_STREAMS_PER_PLANT` / `TELEMETRY_MAX_STREAMS_PER_USER`
+(`app/telemetry/service.py`); an over-limit request gets `429 RATE_LIMITED` with
+`Retry-After` before the stream opens, and the slot is released on disconnect.
+
 ---
 
 ## 14. API Format
@@ -518,19 +523,41 @@ No random core telemetry.
 
 ## 18. Safety Engine
 
-Statuses:
+Implemented in Part 5 (`Backend/app/safety/`, tests in `Backend/tests/test_safety.py`).
+Pure deterministic software: it reads simulator series and events and classifies each
+monitored variable against configured limits. **No LLM decides numeric threshold truth.**
 
-SAFE, NEAR_LIMIT, SAFEGUARD_ACTIVATED, VIOLATION.
+Statuses: **SAFE**, **NEAR_LIMIT**, **SAFEGUARD_ACTIVATED**, **VIOLATION**. A
+`SafetyFinding` records `type` (variable), `status`, `severity`, `timestamp_s`,
+`measured_value`, `limit`, `near_limit` and `scenario_id`. The near-limit band is
+configurable (`SafetyThresholds.near_limit_fraction`, default 0.9; clamped 0.5–1.0).
 
-A SafetyFinding records type, timestamp, measured value, configured limit, scenario and status.
+Per-variable precedence:
 
-Safeguards track trigger, response and violation timing.
+- **VIOLATION** — the actual (guarded) trajectory exceeds the limit;
+- **SAFEGUARD_ACTIVATED** — the variable tripped in the unprotected pass and the applied
+  emergency shutdown kept the tested run within its limit;
+- **NEAR_LIMIT** — entered the near-limit band but never exceeded the limit;
+- **SAFE** — nothing approached the limit.
 
-AI never determines numeric threshold truth.
+The overall `SafetyAssessment.status` is the worst finding status.
+
+**Safeguard timing** (`evaluate_safeguards`) records, per high alarm and for the emergency
+shutdown, `trigger_time_s`, `response_time_s`, `violation_time_s`, `prevented` and a note.
+To make *prevented* vs *too late* physically meaningful, the shutdown is assessed with its
+trip driven by the **high-alarm setpoint** (`near_limit_fraction · limit`) via the
+simulator's `SafeguardSettings.trip_fraction` (default 1.0 keeps Part 4 behaviour). A pure
+trip-at-the-limit model can only ever be too late, because the limit is already exceeded
+when the trip fires. Verdicts are simulation-only and never a claim about a real plant.
+
+`POST /api/v1/simulations/run` returns `{result, safety}` and feeds telemetry.
 
 ---
 
 ## 19. Telemetry
+
+Implemented in Part 5 (`Backend/app/telemetry/`, routes in
+`Backend/app/api/routes/telemetry.py`, tests in `Backend/tests/test_telemetry_api.py`).
 
 ```text
 Simulator
@@ -544,9 +571,28 @@ SSE/API
 Frontend
 ```
 
-Prefer SSE unless WebSocket is genuinely required.
+A run's deterministic result is converted to one `TelemetryFrame` per sample (true values
+and observed sensor values kept separate). The `CurrentStateStore` keeps only the latest
+frame plus a **bounded** per-plant history under a bounded number of plants, so a long run
+can never grow memory without limit.
 
-No LLM per tick. Bound history, secure streams, clean connections.
+Routes (all authenticated and owner-scoped via `get_owned_or_404`; cross-user → 404):
+
+- `GET /api/v1/plants/{id}/telemetry/current` — latest frame (or `null`);
+- `GET /api/v1/plants/{id}/telemetry/history?limit=` — recent bounded history;
+- `GET /api/v1/plants/{id}/telemetry/stream` — SSE replay of stored frames, ending with a
+  `complete` event (the MVP replays a finite deterministic trajectory; clients reconnect
+  and immediately receive current state).
+
+**SSE, not WebSocket** — the traffic is server→client only. Connection limits
+(`TELEMETRY_MAX_STREAMS` / `_PER_PLANT` / `_PER_USER`) are enforced *before* the stream
+opens (over-limit → `429`), and the slot is released in the stream's `finally` on
+completion or client disconnect. **No LLM per tick.**
+
+The monitor (`frontend/src/pages/MonitorPage.tsx`, `hooks/useTelemetry.ts`) hydrates recent
+history, streams new frames, and reconnects with capped backoff; the pure reconnect/merge
+logic lives in `frontend/src/telemetry/streamState.ts` and is unit-tested with the Node
+test runner (`frontend/tests/streamState.test.ts`).
 
 Future real telemetry adapters remain read-only.
 

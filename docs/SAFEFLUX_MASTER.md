@@ -703,7 +703,7 @@ Repository code and current docs are the technical source of truth.
 
 ## 26. Current State
 
-As of 2026-10-04:
+As of 2026-10-05:
 
 - concept, MVP scope, product workflow and tech stack locked,
 - security requirements, one-viewport UI rule, 10-part build plan and Debugging Duck
@@ -711,9 +711,10 @@ As of 2026-10-04:
 - **Part 1** (secure foundation) complete,
 - **Part 2** (authentication + authorization) complete,
 - **Part 3** (plant setup + configuration) complete,
-- **Part 4** (deterministic process simulator) complete.
+- **Part 4** (deterministic process simulator) complete,
+- **Part 5** (safety engine + telemetry) complete.
 
 ### Next action
 
-Part 5 — Safety Engine + Telemetry — then continue the build plan part by part, running
-Debugging Duck after each part.
+Part 6 — Engineering Dashboard + Visualization — then continue the build plan part by part,
+running Debugging Duck after each part.
