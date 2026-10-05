@@ -1,4 +1,5 @@
 import axios, { AxiosError, type AxiosRequestConfig } from 'axios'
+import { emitSessionExpired, shouldNotifySessionExpiry } from './sessionEvents'
 import type { ApiEnvelope, FieldError } from '../types/api'
 
 /**
@@ -38,6 +39,13 @@ export const apiClient = axios.create({
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError<unknown>) => {
+    // 401 on a protected call means the session is gone: tell the auth layer
+    // so the route guard redirects. Login/session/logout probes answer 401 as
+    // normal, so they are excluded (see sessionEvents.shouldNotifySessionExpiry).
+    if (shouldNotifySessionExpiry(error.response?.status, error.config?.url ?? '')) {
+      emitSessionExpired()
+    }
+
     const body = error.response?.data
     if (body && typeof body === 'object' && 'success' in body && body.success === false) {
       const envelope = body as { success: false; error: { code: string; message: string; details?: FieldError[] } }

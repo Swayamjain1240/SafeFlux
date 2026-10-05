@@ -1,6 +1,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { type ReactNode, useCallback, useMemo } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo } from 'react'
 import { apiGet, apiPost } from '../api/client'
+import { onSessionExpired } from '../api/sessionEvents'
+import { clearAssessment } from '../analysis/assessmentStore'
 import {
   AuthContext,
   type AuthStatus,
@@ -30,6 +32,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   })
 
   const user: SessionUser | null = session.data?.user ?? null
+
+  // The backend is the authority: a 401 on any protected call drops our local
+  // session copy, which lets ProtectedRoute bounce the user to /login.
+  useEffect(
+    () =>
+      onSessionExpired(() => {
+        queryClient.removeQueries({ queryKey: SESSION_KEY })
+      }),
+    [queryClient],
+  )
 
   const status: AuthStatus = session.isPending
     ? 'loading'
@@ -61,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // server clears it on logout; even a network error must not keep us signed in.
     } finally {
       queryClient.removeQueries({ queryKey: SESSION_KEY })
+      clearAssessment()
     }
   }, [queryClient])
 
