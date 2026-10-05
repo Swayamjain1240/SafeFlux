@@ -75,3 +75,5 @@ class SimulationRunRequest(_StrictModel):
 
     plant_id: str = Field(min_length=1, max_length=64)
     scenario: ScenarioIn = Field(default_factory=lambda: ScenarioIn(duration_s=300, time_step_s=1.0))
+    # Optional per-request override of the configured near-limit band fraction.
+    near_limit_fraction: float | None = Field(default=None, ge=0.5, le=1.0)

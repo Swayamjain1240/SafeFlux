@@ -72,6 +72,10 @@ class Settings(BaseSettings):
     SIM_RATE_LIMIT_RUNS: int = 30
     SIM_RATE_LIMIT_WINDOW_SECONDS: int = 60
 
+    # --- safety engine (Part 5) ---
+    # Fraction of a limit at which the near-limit band / alarm setpoint starts.
+    SAFETY_NEAR_LIMIT_FRACTION: float = 0.9
+
     # --- live simulated telemetry (Part 5) ---
     TELEMETRY_MAX_HISTORY: int = 600
     TELEMETRY_MAX_PLANTS: int = 200
@@ -195,6 +199,13 @@ class Settings(BaseSettings):
     def _validate_positive_sim_rate_limit(cls, value: int) -> int:
         if value < 1:
             raise ValueError("simulation rate-limit settings must be >= 1")
+        return value
+
+    @field_validator("SAFETY_NEAR_LIMIT_FRACTION")
+    @classmethod
+    def _validate_near_limit_fraction(cls, value: float) -> float:
+        if not (0.5 <= value <= 1.0):
+            raise ValueError("SAFETY_NEAR_LIMIT_FRACTION must be between 0.5 and 1.0")
         return value
 
     @field_validator("TELEMETRY_MAX_HISTORY")

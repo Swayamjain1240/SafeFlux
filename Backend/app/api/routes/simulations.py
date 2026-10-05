@@ -11,6 +11,11 @@ Security posture:
   Settings before any integration runs (rule 8),
 - the endpoint has its own per-IP rate-limit bucket,
 - the response follows the shared success envelope and never leaks internals.
+
+From Part 5 the run also returns a deterministic ``safety`` assessment and feeds
+bounded live telemetry: the result is produced with the emergency shutdown
+driven by the high alarm setpoint so safeguard timing can be verified, and the
+assessment is numeric — the LLM never decides a safety status.
 """
 
 from __future__ import annotations
@@ -26,6 +31,7 @@ from app.core.rate_limit import simulation_rate_limit
 from app.core.responses import FieldError, error_response, success_response
 from app.database import get_db
 from app.models import Plant, User
+from app.safety import SafetyThresholds, assess_scenario
 from app.schemas import SimulationRunRequest
 from app.simulator import (
     FaultSpec,
@@ -38,7 +44,6 @@ from app.simulator import (
     SimulationLimitError,
     SimulationLimits,
     volume_from_level,
-    run_simulation,
 )
 
 logger = logging.getLogger("safeflux.simulations")
@@ -110,7 +115,7 @@ def _to_input(plant: Plant, payload: SimulationRunRequest, limits: SimulationLim
 @router.post(
     "/run",
     dependencies=[Depends(simulation_rate_limit)],
-    summary="Run one deterministic simulation scenario",
+    summary="Run one deterministic simulation scenario with a safety assessment",
 )
 def run_scenario(
     payload: SimulationRunRequest,
@@ -128,9 +133,21 @@ def run_scenario(
         max_samples=settings.SIM_MAX_SAMPLES,
     )
     sim_input = _to_input(plant, payload, limits)
+    fraction = payload.near_limit_fraction or settings.SAFETY_NEAR_LIMIT_FRACTION
+    thresholds = SafetyThresholds(
+        max_temperature_c=plant.safety_limits.max_temperature_c,
+        max_pressure_bar=plant.safety_limits.max_pressure_bar,
+        max_level_pct=plant.safety_limits.max_level_pct,
+        near_limit_fraction=fraction,
+    )
 
     try:
-        result = run_simulation(sim_input)
+        # Safety assessment runs the deterministic simulator with the emergency
+        # shutdown driven by the high alarm setpoint; the returned result is the
+        # guarded run the verdict is derived from.
+        assessment, result = assess_scenario(
+            sim_input, thresholds, scenario_id=payload.scenario.label
+        )
     except SimulationLimitError as exc:
         return error_response(
             422,
@@ -139,10 +156,20 @@ def run_scenario(
             [FieldError(field=field, message=message) for field, message in exc.errors],
         )
 
+    # Feed the live telemetry store (bounded) so the monitor can stream it.
+    limits_map = {
+        "temperature_c": thresholds.max_temperature_c,
+        "pressure_bar": thresholds.max_pressure_bar,
+        "level_pct": thresholds.max_level_pct,
+    }
+    near_map = {name: value * fraction for name, value in limits_map.items()}
+    request.app.state.telemetry.ingest_result(plant.id, result, limits_map, near_map)
+
     logger.info(
-        "Simulation run: plant=%s user=%s samples=%s",
+        "Simulation run: plant=%s user=%s samples=%s status=%s",
         plant.id,
         user.id,
         result.summary.get("sample_count"),
+        assessment.status.value,
     )
-    return success_response({"result": result.to_dict()})
+    return success_response({"result": result.to_dict(), "safety": assessment.to_dict()})
