@@ -1,4 +1,14 @@
 import { useMemo, useState } from 'react'
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import type { StreamFrame } from '../../telemetry/streamState'
 
 interface TabDef {
@@ -16,66 +26,77 @@ const TABS: TabDef[] = [
   { id: 'flow', label: 'Flow', key: 'outlet_flow_lpm', unit: 'L/min' },
 ]
 
-const MAX_POINTS = 220
+/** Cap the rendered points so a long run stays readable and cheap. */
+const MAX_POINTS = 240
 
-const STATUS_DOT: Record<string, string> = {
-  safe: 'bg-emerald-400',
-  near_limit: 'bg-amber-400',
-  violation: 'bg-rose-500',
-  safeguard_activated: 'bg-cyan-400',
+interface Point {
+  t: number
+  v: number
 }
 
-function downsample(values: number[]): number[] {
-  if (values.length <= MAX_POINTS) return values
-  const step = values.length / MAX_POINTS
-  const out: number[] = []
-  for (let i = 0; i < MAX_POINTS; i += 1) {
-    out.push(values[Math.floor(i * step)])
-  }
+function downsample<T>(items: T[]): T[] {
+  if (items.length <= MAX_POINTS) return items
+  const step = items.length / MAX_POINTS
+  const out: T[] = []
+  for (let i = 0; i < MAX_POINTS; i += 1) out.push(items[Math.floor(i * step)])
   return out
 }
 
-/** Minimal dependency-free SVG line chart — no chart library needed. */
+/**
+ * Telemetry chart workspace (Part 6).
+ *
+ * Switchable chart tabs (Temperature / Pressure / Level / Flow) keep four
+ * series in one panel so the page stays inside a single viewport. Built on
+ * Recharts as the stack specifies; animation is disabled because the series
+ * already replays frame by frame and `prefers-reduced-motion` must be honoured
+ * without extra configuration.
+ */
 export function TelemetryChart({ frames }: { frames: StreamFrame[] }) {
   const [active, setActive] = useState(TABS[0].id)
   const tab = TABS.find((item) => item.id === active) ?? TABS[0]
-  const latest = frames.length ? frames[frames.length - 1] : null
 
-  const geometry = useMemo(() => {
-    const raw = frames.map((frame) => frame.values[tab.key]).filter((v) => v !== undefined)
-    const series = downsample(raw)
-    if (series.length < 2) return null
-    const limit = tab.limitKey ? frames[frames.length - 1]?.limits[tab.limitKey] : undefined
-    const near = tab.limitKey ? frames[frames.length - 1]?.near_limits[tab.limitKey] : undefined
-    const candidates = [...series]
-    if (limit !== undefined) candidates.push(limit)
-    if (near !== undefined) candidates.push(near)
+  const points: Point[] = useMemo(() => {
+    const rows: Point[] = []
+    for (const frame of frames) {
+      const value = frame.values[tab.key]
+      if (value === undefined) continue
+      rows.push({ t: frame.time_s, v: value })
+    }
+    return downsample(rows)
+  }, [frames, tab.key])
+
+  const latest = frames.length ? frames[frames.length - 1] : null
+  const limit = tab.limitKey && latest ? latest.limits[tab.limitKey] : undefined
+  const near = tab.limitKey && latest ? latest.near_limits[tab.limitKey] : undefined
+  const current = points.length ? points[points.length - 1].v : undefined
+
+  const bounds = useMemo(() => {
+    if (points.length === 0) return null
+    const candidates = points.map((point) => point.v)
     let min = Math.min(...candidates)
     let max = Math.max(...candidates)
+    if (limit !== undefined) {
+      min = Math.min(min, limit)
+      max = Math.max(max, limit)
+    }
     if (min === max) {
       min -= 1
       max += 1
     }
     const pad = (max - min) * 0.08
-    min -= pad
-    max += pad
-    const y = (value: number) => 100 - ((value - min) / (max - min)) * 100
-    const points = series
-      .map((value, index) => `${((index / (series.length - 1)) * 100).toFixed(2)},${y(value).toFixed(2)}`)
-      .join(' ')
-    return { points, min, max, limit, near, y }
-  }, [frames, tab])
-
-  const current = latest?.values[tab.key]
+    return [min - pad, max + pad] as [number, number]
+  }, [points, limit])
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col rounded-xl border border-slate-800 bg-slate-900/60">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-3 py-2">
-        <div className="flex gap-1">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-900/60">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-3 py-2">
+        <div className="flex flex-wrap gap-1" role="tablist" aria-label="Chart series">
           {TABS.map((item) => (
             <button
               key={item.id}
               type="button"
+              role="tab"
+              aria-selected={item.id === active}
               onClick={() => setActive(item.id)}
               className={[
                 'rounded-md px-2.5 py-1 text-xs transition',
@@ -88,72 +109,75 @@ export function TelemetryChart({ frames }: { frames: StreamFrame[] }) {
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2 text-xs text-slate-400">
-          <span
-            aria-hidden="true"
-            className={`h-2 w-2 rounded-full ${STATUS_DOT[latest?.status ?? 'safe'] ?? 'bg-slate-500'}`}
-          />
-          <span className="font-mono">
-            {current === undefined ? '—' : `${current.toFixed(1)} ${tab.unit}`}
-          </span>
-        </div>
+        <span className="font-mono text-xs text-slate-400">
+          {current === undefined ? '—' : `${current.toFixed(1)} ${tab.unit}`}
+        </span>
       </div>
 
-      <div className="relative min-h-0 flex-1 p-3">
-        {geometry ? (
-          <svg
-            viewBox="0 0 100 100"
-            preserveAspectRatio="none"
-            className="h-full w-full"
-            role="img"
-            aria-label={`${tab.label} telemetry chart`}
-          >
-            {geometry.near !== undefined && (
-              <line
-                x1="0"
-                x2="100"
-                y1={geometry.y(geometry.near)}
-                y2={geometry.y(geometry.near)}
-                stroke="#f59e0b"
-                strokeWidth="0.4"
-                strokeDasharray="2 2"
-                vectorEffect="non-scaling-stroke"
+      <div className="min-h-0 flex-1 p-2">
+        {bounds ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={points} margin={{ top: 8, right: 10, bottom: 4, left: 0 }}>
+              <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
+              <XAxis
+                dataKey="t"
+                type="number"
+                domain={['dataMin', 'dataMax']}
+                tick={{ fill: '#64748b', fontSize: 10 }}
+                tickLine={false}
+                axisLine={{ stroke: '#1e293b' }}
+                minTickGap={40}
               />
-            )}
-            {geometry.limit !== undefined && (
-              <line
-                x1="0"
-                x2="100"
-                y1={geometry.y(geometry.limit)}
-                y2={geometry.y(geometry.limit)}
-                stroke="#f43f5e"
-                strokeWidth="0.4"
-                strokeDasharray="3 2"
-                vectorEffect="non-scaling-stroke"
+              <YAxis
+                domain={bounds}
+                tick={{ fill: '#64748b', fontSize: 10 }}
+                tickLine={false}
+                axisLine={false}
+                width={44}
               />
-            )}
-            <polyline
-              points={geometry.points}
-              fill="none"
-              stroke="#22d3ee"
-              strokeWidth="0.8"
-              vectorEffect="non-scaling-stroke"
-            />
-          </svg>
+              <Tooltip
+                contentStyle={{
+                  background: '#0f172a',
+                  border: '1px solid #1e293b',
+                  borderRadius: 8,
+                  fontSize: 11,
+                }}
+                labelStyle={{ color: '#94a3b8' }}
+                formatter={(value) => [`${Number(value).toFixed(2)} ${tab.unit}`, tab.label]}
+                labelFormatter={(value) => `t = ${Number(value).toFixed(0)} s`}
+              />
+              {near !== undefined && (
+                <ReferenceLine
+                  y={near}
+                  stroke="#f59e0b"
+                  strokeDasharray="4 3"
+                  label={{ value: 'near', position: 'insideTopRight', fill: '#f59e0b', fontSize: 9 }}
+                />
+              )}
+              {limit !== undefined && (
+                <ReferenceLine
+                  y={limit}
+                  stroke="#f43f5e"
+                  strokeDasharray="5 3"
+                  label={{ value: 'limit', position: 'insideTopRight', fill: '#f43f5e', fontSize: 9 }}
+                />
+              )}
+              <Line
+                type="monotone"
+                dataKey="v"
+                stroke="#22d3ee"
+                strokeWidth={1.5}
+                dot={false}
+                isAnimationActive={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
         ) : (
-          <div className="flex h-full items-center justify-center text-xs text-slate-500">
-            No telemetry yet — run a scenario to populate the stream.
+          <div className="flex h-full items-center justify-center px-3 text-center text-xs text-slate-500">
+            No telemetry yet — run a scenario to populate this chart.
           </div>
         )}
       </div>
-
-      {geometry && (
-        <div className="flex justify-between border-t border-slate-800 px-3 py-1.5 font-mono text-[10px] text-slate-500">
-          <span>{geometry.min.toFixed(1)}</span>
-          {geometry.limit !== undefined && <span className="text-rose-400">limit {geometry.limit}</span>}
-          <span>{geometry.max.toFixed(1)}</span>
-        </div>
-      )}
     </div>
   )
 }
