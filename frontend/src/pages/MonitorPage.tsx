@@ -3,9 +3,15 @@ import { useMutation } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { runScenario, type ScenarioInput } from '../api/telemetry'
 import { ErrorPanel } from '../components/ErrorPanel'
-import { ProcessTopology } from '../components/plant/ProcessTopology'
+import { ProcessGraph, type ProcessSnapshot } from '../components/plant/ProcessGraph'
 import { TelemetryCards } from '../components/monitor/TelemetryCards'
 import { TelemetryChart } from '../components/monitor/TelemetryChart'
+import { StatePanel } from '../components/ui/StatePanel'
+import { TabBar } from '../components/ui/TabBar'
+import { useReducedMotion } from '../animation/useReducedMotion'
+import { useRecordAssessment } from '../hooks/useAssessment'
+import { useViewport } from '../layout/useViewport'
+import { usesWideLayout } from '../layout/viewport'
 import { usePlant, usePlantList } from '../hooks/usePlants'
 import { useTelemetry } from '../hooks/useTelemetry'
 import type { SafetyAssessment, SafetyStatus } from '../types/telemetry'
@@ -56,6 +62,15 @@ const STATUS_CLASS: Record<SafetyStatus, string> = {
   safeguard_activated: 'border-cyan-500/40 bg-cyan-500/5 text-cyan-300',
   violation: 'border-rose-500/50 bg-rose-500/10 text-rose-300',
 }
+
+type AnyStatus = 'safe' | 'near_limit' | 'safeguard_activated' | 'violation' | 'unknown'
+
+const KNOWN_STATUSES = new Set<string>([
+  'safe',
+  'near_limit',
+  'safeguard_activated',
+  'violation',
+])
 
 const PHASE_LABEL: Record<string, string> = {
   idle: 'Idle',
@@ -116,11 +131,17 @@ export default function MonitorPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [presetId, setPresetId] = useState(PRESETS[0].id)
   const [started, setStarted] = useState(false)
+  const [monitorTab, setMonitorTab] = useState<'telemetry' | 'process'>('telemetry')
 
   // Default to the first plant without an effect that re-runs on every render.
   const plantId = selectedId ?? plants[0]?.id ?? null
   const detail = usePlant(plantId)
+  const plant = detail.data?.plant ?? null
   const stream = useTelemetry(plantId, started)
+  const reducedMotion = useReducedMotion()
+  const { viewport } = useViewport()
+  const wide = usesWideLayout(viewport)
+  const recordAssessment = useRecordAssessment()
   const run = useMutation({
     mutationFn: (scenario: ScenarioInput) => runScenario(plantId as string, scenario),
   })
@@ -133,29 +154,66 @@ export default function MonitorPage() {
     if (!plantId) return
     setStarted(false)
     run.mutate(preset.scenario, {
-      onSuccess: () => setStarted(true),
+      onSuccess: (data) => {
+        // The dashboard reads this to show recent findings + analysis status.
+        recordAssessment({
+          plantId,
+          scenarioLabel: preset.scenario.label ?? preset.id,
+          recordedAt: Date.now(),
+          safety: data.safety,
+        })
+        setStarted(true)
+      },
     })
   }
 
   if (list.isLoading) {
-    return <p className="text-sm text-slate-500">Loading plants…</p>
+    return (
+      <StatePanel title="Loading plants…" hint="Fetching your configured plants." />
+    )
   }
   if (list.isError) {
-    return <ErrorPanel error={list.error} title="Could not load plants" />
-  }
-  if (plants.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-        <p className="text-sm text-slate-300">No plants configured yet.</p>
-        <Link
-          to="/plant"
-          className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
+      <div className="h-full min-h-0">
+        <StatePanel
+          tone="crit"
+          title="Could not load plants"
+          hint="The API returned an error while loading your plants."
         >
-          Configure a plant
-        </Link>
+          <div className="mt-3 text-left">
+            <ErrorPanel error={list.error} title="Details" />
+          </div>
+        </StatePanel>
       </div>
     )
   }
+  if (plants.length === 0) {
+    return (
+      <StatePanel title="No plants configured yet" hint="Create a plant before running a scenario.">
+        <Link
+          to="/plant"
+          className="mt-4 inline-block rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
+        >
+          Configure a plant
+        </Link>
+      </StatePanel>
+    )
+  }
+
+  const values: ProcessSnapshot = {
+    temperature_c: lastFrame?.values.temperature_c ?? plant?.state.temperature_c ?? 0,
+    pressure_bar: lastFrame?.values.pressure_bar ?? plant?.state.pressure_bar ?? 0,
+    level_pct: lastFrame?.values.level_pct ?? plant?.state.level_pct ?? 0,
+    feed_flow_lpm: lastFrame?.values.feed_flow_lpm ?? plant?.config.feed_flow_lpm ?? 0,
+    outlet_flow_lpm: lastFrame?.values.outlet_flow_lpm ?? 0,
+    pump_running: lastFrame?.pump_running ?? plant?.state.pump_running ?? false,
+  }
+  // streamState frames carry a plain string; narrow it to the known statuses.
+  const safetyStatus: AnyStatus = safety
+    ? safety.status
+    : lastFrame && KNOWN_STATUSES.has(lastFrame.status)
+      ? (lastFrame.status as AnyStatus)
+      : 'unknown'
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
@@ -219,10 +277,30 @@ export default function MonitorPage() {
         </div>
       )}
 
+      {!wide && (
+        <TabBar
+          tabs={[
+            { id: 'telemetry', label: 'Telemetry' },
+            { id: 'process', label: 'Process & safety' },
+          ]}
+          active={monitorTab}
+          onChange={setMonitorTab}
+          label="Monitor panels"
+        />
+      )}
+
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        {/* Desktop: process graph + safety. Mobile hides it (one viz at a time). */}
-        <div className="hidden min-h-0 flex-col gap-3 lg:flex">
-          {detail.data && <ProcessTopology plant={detail.data.plant} />}
+        {/* Desktop: process graph + safety. Narrow viewports pick one panel. */}
+        <div className={`min-h-0 flex-col gap-3 ${wide ? 'flex' : monitorTab === 'process' ? 'flex' : 'hidden'}`}>
+          {plant && (
+            <ProcessGraph
+              plant={plant}
+              values={values}
+              safetyStatus={safetyStatus}
+              reducedMotion={reducedMotion}
+              className="h-52 sm:h-64"
+            />
+          )}
           <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-800 bg-slate-900/60 p-3">
             <p className="mb-2 text-[10px] tracking-wide text-slate-500 uppercase">
               Safety verdict (deterministic)
@@ -232,7 +310,7 @@ export default function MonitorPage() {
         </div>
 
         {/* Chart workspace: cards + tabs (the single mobile visualization). */}
-        <div className="flex min-h-0 flex-col gap-3">
+        <div className={`min-h-0 min-w-0 flex-col gap-3 ${wide ? 'flex' : monitorTab === 'telemetry' ? 'flex' : 'hidden'}`}>
           <TelemetryCards frame={lastFrame} />
           <TelemetryChart frames={stream.frames} />
         </div>
