@@ -70,13 +70,21 @@ class LimitSet:
 
 @dataclass(frozen=True)
 class SafeguardSettings:
-    """Armed safeguards copied from the plant's SafeguardConfig."""
+    """Armed safeguards copied from the plant's SafeguardConfig.
+
+    ``trip_fraction`` is the fraction of a configured limit at which the armed
+    trip fires: ``1.0`` trips exactly at the limit (Part 4 behaviour), while a
+    value below 1 (e.g. the safety engine's near-limit alarm setpoint) makes the
+    emergency shutdown respond *before* the limit is reached so its timing can be
+    verified. It never changes the limit itself.
+    """
 
     auto_shutdown_enabled: bool = False
     high_temperature_trip: bool = True
     high_pressure_trip: bool = True
     high_level_trip: bool = True
     trip_delay_s: float = 0.0
+    trip_fraction: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -194,14 +202,19 @@ def _detect_crossings(
     pressures: list[float],
     levels: list[float],
 ) -> list[_Crossing]:
-    """First sample where each armed trip limit is exceeded."""
+    """First sample where each armed trip setpoint is exceeded."""
+    fraction = sim.safeguards.trip_fraction
     rules = []
     if sim.safeguards.high_temperature_trip:
-        rules.append(("temperature_c", temperatures, sim.safety_limits.max_temperature_c))
+        rules.append(
+            ("temperature_c", temperatures, sim.safety_limits.max_temperature_c * fraction)
+        )
     if sim.safeguards.high_pressure_trip:
-        rules.append(("pressure_bar", pressures, sim.safety_limits.max_pressure_bar))
+        rules.append(
+            ("pressure_bar", pressures, sim.safety_limits.max_pressure_bar * fraction)
+        )
     if sim.safeguards.high_level_trip:
-        rules.append(("level_pct", levels, sim.safety_limits.max_level_pct))
+        rules.append(("level_pct", levels, sim.safety_limits.max_level_pct * fraction))
 
     crossings: list[_Crossing] = []
     for variable, values, limit in rules:
