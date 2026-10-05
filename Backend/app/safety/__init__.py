@@ -14,6 +14,7 @@ from app.safety.constants import (
     SAFETY_ENGINE_VERSION,
     SAFETY_LANGUAGE_DISCLAIMER,
 )
+from app.safety.evaluator import evaluate_simulation
 from app.safety.findings import (
     SafetyAssessment,
     SafetyFinding,
@@ -31,5 +32,6 @@ __all__ = [
     "SafetyFinding",
     "SafetyStatus",
     "SafetyThresholds",
+    "evaluate_simulation",
     "worst_status",
 ]
