@@ -72,6 +72,15 @@ class Settings(BaseSettings):
     SIM_RATE_LIMIT_RUNS: int = 30
     SIM_RATE_LIMIT_WINDOW_SECONDS: int = 60
 
+    # --- live simulated telemetry (Part 5) ---
+    TELEMETRY_MAX_HISTORY: int = 600
+    TELEMETRY_MAX_PLANTS: int = 200
+    TELEMETRY_MAX_STREAMS: int = 64
+    TELEMETRY_MAX_STREAMS_PER_PLANT: int = 8
+    TELEMETRY_MAX_STREAMS_PER_USER: int = 4
+    TELEMETRY_REPLAY_INTERVAL_MS: int = 250
+    TELEMETRY_HISTORY_DEFAULT_LIMIT: int = 120
+
     # --- AI provider (Nebius / NVIDIA Nemotron), used from Part 8 ---
     NEBIUS_API_KEY: SecretStr | None = None
     NEBIUS_BASE_URL: str | None = None
@@ -186,6 +195,37 @@ class Settings(BaseSettings):
     def _validate_positive_sim_rate_limit(cls, value: int) -> int:
         if value < 1:
             raise ValueError("simulation rate-limit settings must be >= 1")
+        return value
+
+    @field_validator("TELEMETRY_MAX_HISTORY")
+    @classmethod
+    def _validate_telemetry_max_history(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("TELEMETRY_MAX_HISTORY must be >= 1")
+        if value > 1_000_000:
+            raise ValueError("TELEMETRY_MAX_HISTORY must be <= 1000000")
+        return value
+
+    @field_validator(
+        "TELEMETRY_MAX_PLANTS",
+        "TELEMETRY_MAX_STREAMS",
+        "TELEMETRY_MAX_STREAMS_PER_PLANT",
+        "TELEMETRY_MAX_STREAMS_PER_USER",
+        "TELEMETRY_HISTORY_DEFAULT_LIMIT",
+    )
+    @classmethod
+    def _validate_telemetry_positive(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("telemetry settings must be >= 1")
+        return value
+
+    @field_validator("TELEMETRY_REPLAY_INTERVAL_MS")
+    @classmethod
+    def _validate_telemetry_replay_interval(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("TELEMETRY_REPLAY_INTERVAL_MS must be >= 0")
+        if value > 60_000:
+            raise ValueError("TELEMETRY_REPLAY_INTERVAL_MS must be <= 60000")
         return value
 
     @model_validator(mode="after")

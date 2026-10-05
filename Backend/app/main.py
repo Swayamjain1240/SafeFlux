@@ -19,6 +19,7 @@ from app.core.errors import register_exception_handlers
 from app.core.rate_limit import RateLimitMiddleware
 from app.core.security import SecurityHeadersMiddleware, add_cors_middleware
 from app.database import init_db
+from app.telemetry import CurrentStateStore, TelemetryService
 
 API_PREFIX = "/api/v1"
 HEALTH_PATH = f"{API_PREFIX}/health"
@@ -62,6 +63,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.auth_limiters = {}
     app.state.simulation_limiters = {}
+    app.state.telemetry = TelemetryService(
+        CurrentStateStore(
+            max_history=settings.TELEMETRY_MAX_HISTORY,
+            max_plants=settings.TELEMETRY_MAX_PLANTS,
+        ),
+        max_streams_total=settings.TELEMETRY_MAX_STREAMS,
+        max_streams_per_plant=settings.TELEMETRY_MAX_STREAMS_PER_PLANT,
+        max_streams_per_user=settings.TELEMETRY_MAX_STREAMS_PER_USER,
+        replay_interval_s=settings.TELEMETRY_REPLAY_INTERVAL_MS / 1000.0,
+    )
 
     register_exception_handlers(app)
 

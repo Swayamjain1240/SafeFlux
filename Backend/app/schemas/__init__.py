@@ -11,6 +11,13 @@ from app.schemas.simulation import (
     SensorFaultIn,
     SimulationRunRequest,
 )
+from app.schemas.telemetry import (
+    TelemetryCurrentData,
+    TelemetryCurrentEnvelope,
+    TelemetryFrameOut,
+    TelemetryHistoryData,
+    TelemetryHistoryEnvelope,
+)
 from app.schemas.plant import (
     PlantConfigIn,
     PlantConfigOut,
@@ -56,6 +63,11 @@ __all__ = [
     "ScenarioIn",
     "SensorFaultIn",
     "SessionData",
+    "TelemetryCurrentData",
+    "TelemetryCurrentEnvelope",
+    "TelemetryFrameOut",
+    "TelemetryHistoryData",
+    "TelemetryHistoryEnvelope",
     "SessionEnvelope",
     "SessionUser",
     "SignupRequest",

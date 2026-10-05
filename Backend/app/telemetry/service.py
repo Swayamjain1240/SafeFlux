@@ -94,6 +94,18 @@ class TelemetryService:
                 return self._total
             return self._per_plant.get(plant_id, 0)
 
+    def acquire(self, plant_id: str, user_id: str) -> None:
+        """Reserve a stream slot, raising ConnectionLimitError if at a limit.
+
+        Called before a streaming response is created so an over-limit client
+        receives a normal rate-limited envelope instead of a half-open stream.
+        """
+        self._register(plant_id, user_id)
+
+    def release(self, plant_id: str, user_id: str) -> None:
+        """Release a previously acquired stream slot (idempotent per slot)."""
+        self._release(plant_id, user_id)
+
     def _register(self, plant_id: str, user_id: str) -> None:
         with self._lock:
             if self._total >= self._max_total:
