@@ -21,6 +21,7 @@ from app.safety.findings import (
     SafetyFinding,
     SafetyStatus,
     SafetyThresholds,
+    status_rank,
     worst_status,
 )
 from app.safety.safeguards import SafeguardTiming, evaluate_safeguards
@@ -56,5 +57,6 @@ __all__ = [
     "assess_simulation",
     "evaluate_safeguards",
     "evaluate_simulation",
+    "status_rank",
     "worst_status",
 ]

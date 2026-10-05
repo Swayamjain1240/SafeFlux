@@ -45,6 +45,16 @@ _SEVERITY_LABEL: dict[SafetyStatus, str] = {
 }
 
 
+def status_rank(status: SafetyStatus) -> int:
+    """Numeric risk rank (SAFE=0 … VIOLATION=3).
+
+    Single source of truth for 'worse than': the roll-up uses it to reduce many
+    findings to one status, and the scenario search uses it to compare sampled
+    points along a variable.
+    """
+    return _STATUS_RANK[status]
+
+
 def worst_status(statuses: list[SafetyStatus]) -> SafetyStatus:
     """Return the most severe status (SAFE when the list is empty)."""
     if not statuses:
@@ -146,5 +156,6 @@ __all__ = [
     "SafetyFinding",
     "SafetyStatus",
     "SafetyThresholds",
+    "status_rank",
     "worst_status",
 ]
