@@ -45,6 +45,31 @@ def test_validation_error_returns_sanitized_details():
     assert "not-a-number" not in response.text
 
 
+def test_unknown_field_names_are_never_reflected(client):
+    """An unknown key is attacker-supplied text, so it is never echoed back.
+
+    Strict schemas reject unknown fields. The rejection is reported against the
+    body rather than by the submitted name, because that name is unvalidated
+    client input and reflecting it is a (small) injection surface.
+    """
+    marker = "reflected_field_7b3f"
+    response = client.post(
+        "/api/v1/auth/signup",
+        json={
+            "fullName": "Ada Lovelace",
+            "email": "ada@example.com",
+            "password": "correct-horse-battery-staple",
+            marker: marker,
+        },
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["error"]["code"] == "VALIDATION_ERROR"
+    assert [detail["field"] for detail in body["error"]["details"]] == ["body"]
+    assert marker not in response.text
+
+
 def test_unhandled_exception_returns_safe_500():
     app = create_app()
 

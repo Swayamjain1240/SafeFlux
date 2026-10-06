@@ -102,11 +102,19 @@ async def handle_validation_error(
 ) -> JSONResponse:
     details: list[FieldError] = []
     for err in exc.errors()[:20]:
+        error_type = err.get("type")
+        message = _sanitize(err.get("msg", "Invalid value"), limit=200)
+        if error_type == "extra_forbidden":
+            # The field name of an unknown key is attacker-supplied text, so it
+            # is never reflected back. The rejection is reported against the
+            # body instead (rule 6: no echo of submitted values).
+            details.append(FieldError(field="body", message=message))
+            continue
         location = [str(part) for part in err.get("loc", ()) if part != "body"]
         details.append(
             FieldError(
                 field=".".join(location) or "body",
-                message=_sanitize(err.get("msg", "Invalid value"), limit=200),
+                message=message,
             )
         )
     logger.warning("Validation failure on %s %s", request.method, request.url.path)
