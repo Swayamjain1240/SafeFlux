@@ -747,15 +747,16 @@ As of 2026-10-06:
   scanned for injection, recorded and wrapped so it can never be obeyed or escaped. The API is
   `GET /api/v1/investigations/capabilities` + `POST /api/v1/investigations/run`, owner-scoped,
   rate-limited per authenticated user and protected against duplicate clicks (`409`). Backend
-  tests 288 passing; frontend unit tests 65 passing; Part 8 adds no frontend module (the live
+  tests 295 passing; frontend unit tests 65 passing; Part 8 adds no frontend module (the live
   investigation UX is Part 9). **The one controlled real inference has not run yet** because
   `Backend/.env` does not exist on this machine — nothing about the real model has been claimed.
 
 ### Next action
 
 Create `Backend/.env` with non-empty `NEBIUS_API_KEY`, `NEBIUS_BASE_URL` and `NEBIUS_MODEL`
-(the key stays out of chat and out of Git), resolve the exact account-eligible Nemotron model
-id from `GET {NEBIUS_BASE_URL}/models`, then run **one** controlled investigation through
-`POST /api/v1/investigations/run` and confirm a real model decision, a real tool call and real
-deterministic evidence. That closes Part 8; Part 9 then owns the live investigation / reverify /
-report UX.
+(the key stays out of chat and out of Git), then finish Part 8 with the operator probe
+(`Backend/scripts/nebius_probe.py`): `models` resolves the exact account-eligible Nemotron
+model id from the live catalogue, `check` proves the triple with one tiny completion, and
+`investigate` runs **one** controlled investigation and must show a real model decision, a real
+tool call and real deterministic evidence. That closes Part 8; Part 9 then owns the live
+investigation / reverify / report UX.

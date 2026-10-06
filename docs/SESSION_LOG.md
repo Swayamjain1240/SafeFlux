@@ -107,7 +107,15 @@ prompt); the simulator, safety engine and search engine inside the tools are the
 
 ### Checks
 
-- Backend: **288** pytest tests passing (exit 0), of which 104 are Part 8.
+- Backend: **295** pytest tests passing (exit 0), of which 111 are Part 8.
+- A small operator probe (`Backend/scripts/nebius_probe.py`) closes the gap between
+  "implemented" and "the real inference can run": it lists the Nemotron-family models the
+  account can actually call (`models`), verifies the configured key/URL/model triple with one
+  tiny completion (`check`), and runs one controlled investigation for an owned plant through
+  the same `InvestigationService` the endpoint uses (`investigate`). The key is read only from
+  `Backend/.env` — never a command-line argument, never printed — so it cannot leak into shell
+  history or a transcript. The probe is tested against a local OpenAI-compatible fake on
+  loopback, which also proves the https-or-loopback transport rule with real HTTP.
 - Frontend: **65** node tests still passing, `oxlint` clean, `tsc -b && vite build` OK.
 - Part 8 adds **no frontend module**: `/analysis/:id/live` still renders its placeholder and the
   live investigation UX belongs to Part 9. Nothing in Part 8 is claimed as a UI feature.
@@ -116,17 +124,17 @@ prompt); the simulator, safety engine and search engine inside the tools are the
 
 ### Git
 
-Part 8 is 21 commits on `main` (19 implementation/test, 2 documentation), each a coherent
-change with the required trailer, no push.
+Part 8 is 23 commits on `main` (19 implementation/test, 2 documentation, the operator probe and
+its tests), each a coherent change with the required trailer, no push.
 
 ## Blocked
 
 **The one controlled real inference cannot run yet.** `Backend/.env` does not exist on this
 machine (checked repeatedly: the only env files present are `Backend/.env.example` and
 `frontend/.env.example`, and the AI values in the example are empty). No key was ever pasted
-in chat and no key is fabricated here. The real step needs a local `Backend/.env` with
-non-empty `NEBIUS_API_KEY`, `NEBIUS_BASE_URL` and `NEBIUS_MODEL` — the key must **not** be
-pasted into the chat.
+in chat and no key is fabricated here. When the key is placed in `Backend/.env`, the remaining
+work is three commands (`python -m scripts.nebius_probe models`, then `check`, then
+`investigate`) — and the key must **not** be pasted into the chat.
 
 ## Next action
 
