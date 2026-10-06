@@ -4,7 +4,98 @@
 
 ---
 
-# Current Checkpoint — 2026-10-05 · PART 6 COMPLETE
+# Current Checkpoint — 2026-10-06 · PART 7 COMPLETE
+
+**Status:** 🟢 Part 7 (Deterministic Scenario Search) implemented, tested and verified live  
+**Project:** SafeFlux — Autonomous Process-Safety Failure Hunter  
+**Track:** Best Apps & Agents
+
+## What is complete (Part 7)
+
+### The promise: search finds the danger, not the engineer
+
+The engineer chooses a **variable and a resolution**; the search chooses the values. Pipeline,
+with nothing else in it: **Search → Simulator → Safety Engine → Evidence**. No AI is involved
+anywhere in this part, no provider is contacted, and no API key is required.
+
+### Core engine (commits 1–13)
+
+- `app/search/variables.py` — the **allowlist**: a name selects a row of a fixed table that
+  maps it to a typed simulator effect (process fault, safeguard delay, sensor fault). No
+  `eval`, no `exec`, no generated code, no shell anywhere in the package. Sensor variables are
+  marked observation-only: they change reported values, never the true trajectory.
+- `app/search/budgets.py` — two layers: `SearchLimits` (the plan) and `SearchBudget` (the
+  runtime counter charged *before* every simulation). Ceilings: scenarios, combinations,
+  refinement depth, timeout, duration, time step, samples; refinement additionally capped by
+  `MAX_REFINEMENT_EVALUATIONS` independent of depth.
+- `app/search/sweep.py`, `monotonic.py`, `refine.py` — coarse sweep (safe end first),
+  monotonicity classification, and **bisection only when monotonic**; otherwise the bracket
+  is densified, because bisection on a non-monotonic series converges on the wrong point.
+- `app/search/sensitivity.py`, `combinations.py` — one-at-a-time influence ranking and a
+  bounded two-variable grid.
+- `app/search/result.py` + `engine.py` — reproducible evidence document: counts (scenarios,
+  safe, near-limit, safeguard, violation, failing), failure scenarios, boundary candidates
+  with method/monotonicity/uncertainty, the search trace, budget usage, and the
+  configuration/version block with `deterministic: true, ai_involved: false`.
+
+### API and validation (commits 14–19)
+
+- `GET /api/v1/searches/capabilities` publishes the allowlist, modes and effective budgets;
+  the UI renders its controls from this, so a variable cannot become searchable by accident.
+- `POST /api/v1/searches/run` requires a verified session, loads the plant with
+  `get_owned_or_404` (cross-user → 404), validates the whole plan **before any compute**, and
+  is rate-limited on its own bucket (the tightest in the API: one request runs many
+  simulations).
+- Per-request budgets may only **tighten** the configured limits; anything larger is a `422`
+  rejection rather than a silent clamp.
+- Small security fix found by the API tests: unknown field *names* were being reflected back
+  in validation errors. They are now reported against the body (`errors.py`), so no submitted
+  name or value is echoed, while real field paths stay intact.
+
+### Frontend (commits 20–21)
+
+- `/analysis/new` replaced the Part 6 coming-soon placeholder with the one-viewport search
+  workspace: plan editor (plant, preset, method tabs, variable + resolution, advanced budgets)
+  beside a tabbed, paginated evidence viewer (summary counts, failures with filters,
+  boundaries, influence ranking, trace). Narrow/short viewports switch panes via tabs.
+- `src/search/plan.ts` is a pure mirror of the server bounds: `draftIssues()` explains every
+  rejection before submitting, presets are filtered against the capabilities payload, and
+  parsing can never put `NaN` in a payload. Run is disabled while a run is in flight, so one
+  click is one search.
+- Presets are starting *plans*, never verdicts — a preset that finds nothing is an honest
+  result.
+
+### Live verification (real servers, real data)
+
+- Backend on `:8000` and Vite on `:5173`, a signed-up user, one configured plant, then a
+  cooling sweep from the UI: **15 scenarios → 12 safe, 2 safeguard, 1 violation, 1 boundary**
+  (`cooling_factor` 1.0 … 0.125 safe, 0.0 violation with a 162.5 °C peak against the 150 °C
+  limit). Refinement: *last safe 0.0957, first unsafe 0.0938, bisection, ±0.0020*.
+  The same request through the API returned byte-identical evidence except for `elapsed_s`.
+- The seeded unsafe region was found **without telling the search where it is**.
+
+### Checks
+
+- Backend: `184` pytest tests passing (24 engine + 22 API for Part 7 alone).
+- Frontend: `65` node tests passing, `oxlint` clean (0 warnings), `tsc -b && vite build` OK.
+- No new dependency was added in Part 7; no secret, key or generated code exists in the part.
+
+### Git
+
+Part 7 landed as 23 commits on `main` (21 code and test commits, then these two documentation
+commits), each one coherent change with the required trailer and no push.
+
+## Next action
+
+Part 8 — Nebius Token Factory + NVIDIA Nemotron investigation agent. **Before writing any
+provider code:** confirm provider / API key / env vars / base URL / model variables / purpose /
+backend-only, confirm an eligible Nemotron model in the actual account, and request the API
+key explicitly (rule 22). AI decides *what deserves investigation*; the deterministic search
+from Part 7 still decides the values.
+
+---
+
+# Checkpoint — 2026-10-05 · PART 6 COMPLETE
 
 **Status:** 🟢 Part 6 (Engineering Dashboard + Visualization) implemented and tested  
 **Project:** SafeFlux — Autonomous Process-Safety Failure Hunter  

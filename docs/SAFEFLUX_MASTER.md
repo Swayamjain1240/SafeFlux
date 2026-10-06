@@ -703,7 +703,7 @@ Repository code and current docs are the technical source of truth.
 
 ## 26. Current State
 
-As of 2026-10-05:
+As of 2026-10-06:
 
 - concept, MVP scope, product workflow and tech stack locked,
 - security requirements, one-viewport UI rule, 10-part build plan and Debugging Duck
@@ -721,8 +721,21 @@ As of 2026-10-05:
   states explicitly. The process graph also chooses its own orientation from the container
   it is given (pure, unit-tested) so it is never present-but-unreadable. Backend tests 139
   passing; frontend unit tests 51 passing.
+- **Part 7** (deterministic scenario search) complete — coarse sweep, monotonicity-aware
+  boundary refinement (bisection only where justified, densify otherwise), sensitivity
+  ranking and a bounded two-variable grid; every variable comes from a fixed allowlist (no
+  `eval`/`exec`/generated code/shell), every run runs under hard budgets (scenarios,
+  combinations, refinement depth, duration, time step, samples, timeout) that a request may
+  only tighten, and every result is a reproducible evidence document (counts, failures,
+  boundary candidates, trace, configuration/version with `deterministic: true,
+  ai_involved: false`). `GET /api/v1/searches/capabilities` + `POST /api/v1/searches/run`,
+  owner-scoped and rate-limited on the tightest bucket; `/analysis/new` is the one-viewport
+  search workspace. Backend tests 184 passing; frontend unit tests 65 passing. The seeded
+  unsafe region is discovered automatically: no engineer types 100/110/120/130.
 
 ### Next action
 
-Part 7 — Scenario Engine + Boundary Search — then continue the build plan part by part,
-running Debugging Duck after each part.
+Part 8 — Nebius + NVIDIA Nemotron investigation agent — but **no provider code before the
+pre-flight confirmation**: provider, API key, env/base-URL/model variables, purpose,
+backend-only, an eligible Nemotron model verified against the actual account/catalog, and an
+explicit request for the API key (rule 22). The Part 7 search stays the numeric authority.
