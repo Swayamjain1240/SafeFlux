@@ -11,6 +11,11 @@ from app.schemas.simulation import (
     SensorFaultIn,
     SimulationRunRequest,
 )
+from app.schemas.search import (
+    SearchAxisIn,
+    SearchPlanIn,
+    SearchRunRequest,
+)
 from app.schemas.telemetry import (
     TelemetryCurrentData,
     TelemetryCurrentEnvelope,
@@ -41,6 +46,9 @@ from app.schemas.plant import (
 
 __all__ = [
     "FaultIn",
+    "SearchAxisIn",
+    "SearchPlanIn",
+    "SearchRunRequest",
     "LoginRequest",
     "PlantConfigIn",
     "PlantConfigOut",
