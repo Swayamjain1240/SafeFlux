@@ -60,7 +60,10 @@ function AnalysisStrip({ record, compact }: { record: ReturnType<typeof useAsses
         <p className="text-sm text-slate-300">No analysis in progress</p>
         {!compact && (
           <p className="mt-0.5 text-[11px] text-slate-500">
-            Run a scenario to produce a verdict · scenario search arrives in Part 7.
+            Run a scenario to produce a verdict ·{" "}
+            <Link to="/analysis/new" className="text-cyan-400 hover:text-cyan-300">
+              let the search find the boundary
+            </Link>
           </p>
         )}
       </>

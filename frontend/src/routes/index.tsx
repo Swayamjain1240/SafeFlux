@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router-dom'
 import AppLayout from '../layouts/AppLayout'
 import PublicLayout from '../layouts/PublicLayout'
+import AnalysisNewPage from '../pages/AnalysisNewPage'
 import ComingSoon from '../pages/ComingSoon'
 import DashboardPage from '../pages/DashboardPage'
 import LandingPage from '../pages/LandingPage'
@@ -27,7 +28,7 @@ export default function AppRoutes() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/plant" element={<PlantSetupPage />} />
           <Route path="/monitor" element={<MonitorPage />} />
-          <Route path="/analysis/new" element={<ComingSoon title="New analysis" part={7} />} />
+          <Route path="/analysis/new" element={<AnalysisNewPage />} />
           <Route
             path="/analysis/:id/live"
             element={<ComingSoon title="Live autonomous investigation" part={8} />}
