@@ -476,6 +476,26 @@ to a small loggable vocabulary (`auth`, `rate_limit`, `timeout`, `connection`, `
 `invalid_response`). Without all three variables the endpoint returns `not_configured` and no
 model is contacted — Parts 1–7 are unaffected.
 
+#### Resolving the model and running the real inference
+
+A small operator probe turns the three runtime steps into one command each, and the key is
+only ever read from `Backend/.env` — it is never a command-line argument, so it cannot leak
+into shell history or a transcript:
+
+```bash
+# from Backend/
+python -m scripts.nebius_probe models        # list the Nemotron ids THIS account can call
+# put the chosen id in NEBIUS_MODEL, then:
+python -m scripts.nebius_probe check         # one tiny real completion: key + URL + model work
+python -m scripts.nebius_probe investigate --email you@example.com   # one controlled run
+```
+
+`investigate` resolves the plant through ownership (only plants the named account owns), runs
+the same `InvestigationService` the API endpoint runs, and prints the evidence summary —
+statuses, tool calls, boundaries, failures, the explanation headline and the budget. It exits
+`0` only when the run reached `complete`, and never prints the key, an `Authorization` header
+or a bearer token.
+
 ### Why the AI is not the source of physical truth
 
 A language model can be wrong, inconsistent or manipulated, so SafeFlux never asks it for a
