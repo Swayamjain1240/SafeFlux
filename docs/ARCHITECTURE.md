@@ -152,6 +152,23 @@ src/components/dashboard/{MetricGrid,FindingsPanel}.tsx
 src/components/ui/{StatePanel,StatusBadge,TabBar}.tsx
 ```
 
+### Part 7 frontend modules
+
+```text
+src/types/search.ts           mirror of the search API document
+src/search/plan.ts            pure mirror of the server bounds + presets + presentation
+src/search/SearchControls.tsx plan editor rendered from GET /searches/capabilities
+src/search/SearchResults.tsx  tabbed, paginated, filterable evidence viewer
+src/pages/AnalysisNewPage.tsx one-viewport composition (panes on wide, tabs on narrow)
+src/api/searches.ts           GET /searches/capabilities, POST /searches/run
+src/hooks/useSearches.ts      capability query + run mutation (pending state = double-click guard)
+```
+
+The browser never composes a search the server would reject: `draftIssues()` mirrors
+`SearchLimits.validation_errors()` so Run is disabled with a reason, and per-request budgets
+can only tighten. Presets are filtered against the capabilities payload, and presets encode
+a *plan*, never a verdict.
+
 The dashboard picks a plant, polls `telemetry/current` (5s), and shows the safety state,
 seven metrics (temperature, pressure, feed flow, level, cooling, valve, pump), recent
 findings and analysis status. Live values come from the telemetry frame; when no frame
@@ -420,8 +437,15 @@ with `413 PAYLOAD_TOO_LARGE` (via `MAX_REQUEST_BODY_BYTES`) before the body is p
 Implemented in Part 4: `simulation_rate_limit(request)` gives the expensive
 `POST /simulations/run` endpoint its own per-IP bucket (`SIM_RATE_LIMIT_RUNS` /
 `SIM_RATE_LIMIT_WINDOW_SECONDS`), stored on `app.state.simulation_limiters`, on top of the
-hard simulation compute budgets. Endpoint-specific budgets for AI/search arrive with
-their features.
+hard simulation compute budgets.
+
+Implemented in Part 7: `search_rate_limit(request)` gives `POST /searches/run` the
+**tightest bucket in the API** (`SEARCH_RATE_LIMIT_RUNS` / `SEARCH_RATE_LIMIT_WINDOW_SECONDS`,
+default 20 per minute), stored on `app.state.search_limiters`, because one accepted request
+runs many simulations. All three server-side limiters now share one lazy-cache helper
+(`_server_limiter`) and one enforcement helper (`_enforce`), so the `429 RATE_LIMITED`
+envelope and `Retry-After` header are identical everywhere while the buckets stay isolated
+per endpoint. The AI analysis bucket arrives with Part 8.
 
 Implemented in Part 5: telemetry **SSE stream connections** are capped by
 `TELEMETRY_MAX_STREAMS` / `TELEMETRY_MAX_STREAMS_PER_PLANT` / `TELEMETRY_MAX_STREAMS_PER_USER`
@@ -676,19 +700,75 @@ Future real telemetry adapters remain read-only.
 
 ---
 
-## 20. Scenario Search
+## 20. Scenario Search (implemented, Part 7)
 
-Deterministic search may use:
+Pipeline, and nothing else in it:
 
-- coarse sweeps,
-- refinement,
-- binary-search-style refinement when monotonicity is justified,
-- sensitivity analysis,
-- bounded combinations.
+```text
+Search → Simulator → Safety Engine → Evidence
+```
 
-Every run has limits for scenario count, duration, samples, refinement depth and timeout.
+No AI participates. The search is deterministic: identical inputs produce identical
+results, and every returned number was produced by the simulator and the safety engine.
 
-No eval/exec.
+### Backend modules
+
+```text
+app/search/constants.py     engine + method versions, every hard ceiling, disclaimer
+app/search/variables.py     the allowlist: name -> typed simulator effect (no eval/exec)
+app/search/budgets.py       SearchLimits (the plan) + SearchBudget (runtime counter)
+app/search/spec.py          SearchSpec, SearchMode, axes, canonical case keys
+app/search/evaluate.py      one cached, budget-charged case evaluation
+app/search/sweep.py         coarse sweep, safe-end-first traversal
+app/search/monotonic.py     monotonicity classification of a sampled series
+app/search/refine.py        bisection when monotonic, densify otherwise
+app/search/sensitivity.py   one-at-a-time influence ranking
+app/search/combinations.py  bounded two-variable grid
+app/search/result.py        counts, failures, boundary candidates, evidence document
+app/search/engine.py        orchestration + versions()
+app/schemas/search.py       strict request schemas (allowlist enum, ceilings)
+app/api/routes/searches.py  GET /searches/capabilities, POST /searches/run
+```
+
+### Bounded by construction
+
+Two layers: `SearchLimits` (max scenarios, combinations, refinement depth, timeout, max
+duration, min time step, max samples) and `SearchBudget`, the runtime counter charged
+*before* every simulation. A request may only tighten a limit — a larger value is a `422`
+rejection, never a silent clamp. When a limit does stop a search, the result is marked
+`truncated`, the reason is recorded in `budget`/`notes`, and the evidence found so far is
+still returned: a partial search that says it is partial is useful; one that pretends to be
+complete is a hazard. The refinement pass is additionally capped by
+`MAX_REFINEMENT_EVALUATIONS`, independent of depth, so a wide range cannot explode the
+budget.
+
+### Monotonicity is the justification for bisection
+
+`classify_monotonic` labels a sampled series `increasing`, `decreasing`, `non_monotonic` or
+`insufficient`. `refine_boundary` bisects **only** for a monotonic axis; otherwise it
+densifies the bracket. On a decreasing-risk axis the boundary is reported with
+`last_safe > first_unsafe`; on an increasing axis the reverse. Every candidate carries its
+method, monotonicity, evaluation count and uncertainty, so the evidence states *how* the
+boundary was obtained, not just where it is.
+
+### Evidence document
+
+`SearchResult` returns: `counts` (scenarios, safe, near-limit, safeguard-activated,
+violation, failing, observation-only, evaluations, cache hits, distinct cases, boundary
+candidates), `failures` (rank-ordered, bounded by `MAX_REPORTED_FAILURES`), `boundaries`,
+`sensitivity`, `trace` (bounded by `MAX_TRACE_ENTRIES`), `budget`, `config` (versions, spec,
+limits, thresholds) and `notes`. Case keys are canonical strings (`name=value;…` sorted), so
+the same case is the same simulation across runs.
+
+### API and UI
+
+`GET /searches/capabilities` publishes the allowlist, modes and effective budgets;
+the UI renders its controls from it, so a variable cannot become searchable in the browser by
+accident. `POST /searches/run` requires a verified session, loads the plant with
+`get_owned_or_404` (cross-user → `404`), validates the whole plan before any compute and is
+rate-limited on its own bucket. `/analysis/new` is a one-viewport workspace: plan editor on
+one side, tabbed/paginated evidence viewer on the other, tabs instead of stacking on narrow
+screens.
 
 ---
 
@@ -755,12 +835,23 @@ AI explanations cannot overwrite deterministic values.
 ## 25. Testing
 
 Frontend unit tests (Part 6) cover the pure modules under the Node test runner
-(`frontend/tests/*.test.ts`, run with `npm run test:unit`, 51 tests): viewport classification
+(`frontend/tests/*.test.ts`, run with `npm run test:unit`, 65 tests): viewport classification
 (desktop, short laptop, tablet, mobile, degenerate sizes), graph-orientation choice
 (including that a rotated line really does render larger than the squashed one), dashboard
 view-state derivation (loading/offline/session-expired/error/empty/ready and tone/motion
 outputs), API failure classification, the motion plan (including reduced-motion → fully
-static), and the telemetry stream state machine.
+static), the telemetry stream state machine, and (Part 7) the search planning mirror:
+allowlist mirror, per-mode axis counts, preset filtering by server capabilities, request
+building, optional-budget forwarding, every rejection the UI must explain, NaN-free parsing,
+failure filtering and clamped pagination.
+
+Backend tests (`Backend/tests`, 184 passing) cover the Part 7 engine
+(`test_search.py`: deterministic linspaces, safe-end-first traversal, bisection only when
+monotonic, densify otherwise, repeatability, combination caps, the scenario budget, the
+injectable-clock timeout, no value echo) and the API (`test_search_api.py`: capabilities, a
+seeded unsafe region discovered by a sweep, refined boundary, reproducibility, sensitivity,
+bounded combinations, auth, cross-user `404`, invalid and malicious values, oversized-search
+rejection, and the `429` bucket).
 
 Layout is checked beyond the unit tests by driving the running app in a browser and
 measuring the real DOM at each brief target size: document and `main` scroll heights (must
@@ -825,7 +916,7 @@ Use coherent commits. Do not fake commit count.
 4 Simulator
 5 Safety + telemetry
 6 Dashboard
-7 Scenario search
+7 Scenario search (deterministic, no AI)
 8 Nebius/Nemotron agent
 9 Investigation/reverify/report UX
 10 Hardening/deployment/audit

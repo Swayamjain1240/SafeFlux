@@ -15,7 +15,7 @@ equipment** — no PLC/DCS actuation, no real valve or pump control, ever.
 
 ## Status
 
-Build **Part 6 of 10 — engineering dashboard + visualization** is complete.
+Build **Part 7 of 10 — deterministic scenario search** is complete.
 
 | Area | State |
 | --- | --- |
@@ -38,9 +38,13 @@ Build **Part 6 of 10 — engineering dashboard + visualization** is complete.
 | Engineering dashboard on live plant + telemetry data | ✅ |
 | Animated React Flow process graph (GSAP, reduced-motion aware) | ✅ |
 | Central session-expiry handling + one-viewport authenticated pages | ✅ |
-| Backend test suite (pytest) | ✅ 139 passing |
-| Frontend unit tests (node) | ✅ 51 passing |
-| Scenario search / AI agent | ⏳ Parts 7–8 |
+| Deterministic scenario search: sweep, bounded refinement, sensitivity, combinations | ✅ |
+| Allowlisted search variables + strict Pydantic schemas + hard budgets | ✅ |
+| `GET /api/v1/searches/capabilities` + `POST /api/v1/searches/run` (owner-scoped, rate-limited) | ✅ |
+| One-viewport search workspace (`/analysis/new`) with paginated, filtered evidence | ✅ |
+| Backend test suite (pytest) | ✅ 184 passing |
+| Frontend unit tests (node) | ✅ 65 passing |
+| Nebius + NVIDIA Nemotron investigation agent | ⏳ Part 8 |
 | Investigation UX / hardening | ⏳ Parts 9–10 |
 
 ---
@@ -97,11 +101,11 @@ npm run dev                        # http://localhost:5173
 
 ```bash
 # Backend (from Backend/)
-python -m pytest -q -p no:warnings # 139 tests
+python -m pytest -q -p no:warnings # 184 tests
 
 # Frontend (from frontend/)
 npm run lint                       # oxlint, 0 warnings
-npm run test:unit                  # node --test, 51 tests
+npm run test:unit                  # node --test, 65 tests
 npm run build                      # tsc --strict + vite production build
 ```
 
@@ -123,6 +127,9 @@ npm run build                      # tsc --strict + vite production build
 | `SIM_MAX_DURATION_S` / `SIM_MIN_TIME_STEP_S` / `SIM_MAX_SAMPLES` | no | hard simulation compute budgets |
 | `SIM_RATE_LIMIT_RUNS` / `SIM_RATE_LIMIT_WINDOW_SECONDS` | no | simulation per-IP rate limit |
 | `SAFETY_NEAR_LIMIT_FRACTION` | no (0.9) | near-limit band / alarm setpoint as a fraction of each limit |
+| `SEARCH_MAX_SCENARIOS` / `SEARCH_MAX_COMBINATIONS` | no (150 / 36) | hard ceilings for one search |
+| `SEARCH_MAX_REFINEMENT_DEPTH` / `SEARCH_TIMEOUT_SECONDS` | no (6 / 90) | boundary-refinement levels / overall search timeout |
+| `SEARCH_RATE_LIMIT_RUNS` / `SEARCH_RATE_LIMIT_WINDOW_SECONDS` | no | search per-IP rate limit (tightest bucket in the API) |
 | `TELEMETRY_MAX_HISTORY` / `TELEMETRY_MAX_PLANTS` | no | retained frames per plant / plants per process |
 | `TELEMETRY_MAX_STREAMS[_PER_PLANT|_PER_USER]` | no | concurrent SSE stream limits |
 | `TELEMETRY_REPLAY_INTERVAL_MS` / `TELEMETRY_HISTORY_DEFAULT_LIMIT` | no | stream pacing / default history size |
@@ -328,6 +335,78 @@ redirects to `/login`, and the cached assessment is cleared so a previous verdic
 leaks into the next session. Login/session/logout probes are excluded to avoid redirect
 loops.
 
+## Deterministic scenario search (Part 7)
+
+SafeFlux finds dangerous conditions by itself — the engineer never types a list of values
+such as 100, 110, 120, 130. Pipeline, in this order and with nothing else in it:
+
+**Search → Simulator → Safety engine → Evidence**
+
+- **Search** picks the values. Deterministic, allowlisted and bounded: no AI, no
+  `eval`/`exec`, no generated code, no shell.
+- **Simulator** produces the trajectories (the Part 4 model).
+- **Safety engine** produces the verdicts (the Part 5 thresholds).
+- **Evidence** is the returned document: counts, failure scenarios, boundary candidates, the
+  search trace and the configuration/version block.
+
+### Endpoints
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/v1/searches/capabilities` | allowlisted variables, modes and effective budgets |
+| `POST` | `/api/v1/searches/run` | run one bounded search over the caller's plant |
+
+### Methods
+
+| Mode | What it does |
+| --- | --- |
+| `sweep` | coarse sweep of one variable across its allowlisted range, then a bounded refinement of the first safe/unsafe boundary |
+| `sensitivity` | perturbs every allowlisted variable one at a time and ranks its influence |
+| `combinations` | bounded two-variable grid |
+
+Refinement is **bisection only when the sampled status is monotonic** along the axis
+(decreasing or increasing). When it is not, the bracket is **densified** instead — bisection
+on a non-monotonic series converges on the wrong point. Every boundary candidate carries the
+method that produced it, its monotonicity class, its uncertainty and its evaluation count.
+
+A real run on the baseline reactor (nine coarse cooling points, then refinement) returns:
+`cooling_factor` 1.0 … 0.125 → **safe**, 0.0 → **violation** (peak 162.5 °C against a
+150 °C limit), boundary *last safe 0.0957, first unsafe 0.0938, bisection, ±0.0020* — an
+edge the engineer could not have found by hand in nine tries.
+
+### Allowlisted variables
+
+`cooling_factor`, `feed_factor`, `outlet_factor`, `valve_target_pct`, `pump_factor`,
+`shutdown_delay_s`, `temperature_sensor_bias_c`. A variable name only selects one row of a
+fixed table that maps it to a typed simulator fault (or a safeguard delay, or a sensor
+fault); anything else fails schema validation, so no client-supplied name can ever reach the
+simulator. Sensor variables are marked **observation-only** in the result: they change what
+the plant *reports*, never the true trajectory.
+
+### Budgets
+
+Hard, and enforced before compute: max scenarios, max combinations, max refinement depth,
+max simulation duration, min time step, max sample count and an overall wall-clock timeout.
+A request may only **tighten** a budget — asking for more than the operator configured is a
+**422 rejection, never a silent clamp**, because a search that quietly covers less than it
+claims is worse than no search. A search that hits a limit returns a result marked
+`truncated` with the reason recorded in `budget` and `notes`.
+
+### Reproducibility
+
+Identical requests return identical evidence (counts, cases, failures, boundaries, trace),
+apart from the measured elapsed time. Case keys are canonical strings, so the same case is
+the same simulation. Every result carries the search engine, method, simulator model and
+safety engine versions and states `deterministic: true, ai_involved: false`.
+
+### UI (`/analysis/new`)
+
+One viewport, two panes: a plan editor (plant, preset, method tabs, variable + resolution,
+advanced budgets) and a tabbed, paginated result viewer (summary counts, failures with
+status/variable/text filters, boundaries, influence ranking, trace). Presets are **starting
+plans, never verdicts** — a preset that finds nothing is an honest result. On tablet/mobile
+the panes switch via tabs instead of stacking, so nothing is clipped or endlessly scrolled.
+
 ## Security baseline
 
 ### Part 1
@@ -384,6 +463,20 @@ loops.
 - All rendering is React-escaped text — no `dangerouslySetInnerHTML`; chart data is numeric
 - Two dependencies added (`recharts`, `gsap`), both used; `npm audit --omit=dev` → 0
   vulnerabilities
+
+### Part 7
+
+- The search never uses `eval()`, `exec()`, generated Python or shell commands — a variable
+  name can only select an entry from the fixed allowlist
+- `POST /api/v1/searches/run` requires a verified session and loads the plant with
+  `get_owned_or_404`; another user's plant returns **404**
+- Oversized searches are rejected (`422`) **before** any simulation runs, and per-request
+  budgets may only tighten the configured ceilings
+- The search endpoint has the tightest per-IP rate-limit bucket in the API, because one
+  request runs many simulations
+- Validation errors never echo submitted values, and unknown field names are no longer
+  reflected either — they are reported against the body instead
+- No AI anywhere in this part: no provider is contacted and no API key is required
 
 ### Part 5
 
