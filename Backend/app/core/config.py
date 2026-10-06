@@ -85,6 +85,18 @@ class Settings(BaseSettings):
     TELEMETRY_REPLAY_INTERVAL_MS: int = 250
     TELEMETRY_HISTORY_DEFAULT_LIMIT: int = 120
 
+    # --- deterministic scenario search (Part 7) ---
+    # Hard ceilings on one search. A request may tighten these but never loosen
+    # them, and ``resolve_limits`` clamps the settings values to the engine's own
+    # ceilings so a bad environment variable cannot uncap a search.
+    SEARCH_MAX_SCENARIOS: int = 150
+    SEARCH_MAX_COMBINATIONS: int = 36
+    SEARCH_MAX_REFINEMENT_DEPTH: int = 6
+    SEARCH_TIMEOUT_SECONDS: float = 90.0
+    # Per-IP budget for POST /searches/run (expensive: many simulations).
+    SEARCH_RATE_LIMIT_RUNS: int = 20
+    SEARCH_RATE_LIMIT_WINDOW_SECONDS: int = 60
+
     # --- AI provider (Nebius / NVIDIA Nemotron), used from Part 8 ---
     NEBIUS_API_KEY: SecretStr | None = None
     NEBIUS_BASE_URL: str | None = None
@@ -237,6 +249,55 @@ class Settings(BaseSettings):
             raise ValueError("TELEMETRY_REPLAY_INTERVAL_MS must be >= 0")
         if value > 60_000:
             raise ValueError("TELEMETRY_REPLAY_INTERVAL_MS must be <= 60000")
+        return value
+
+    @field_validator("SEARCH_MAX_SCENARIOS")
+    @classmethod
+    def _validate_search_scenarios(cls, value: int) -> int:
+        from app.search.constants import MAX_SCENARIOS_CEILING
+
+        if value < 1:
+            raise ValueError("SEARCH_MAX_SCENARIOS must be >= 1")
+        if value > MAX_SCENARIOS_CEILING:
+            raise ValueError("SEARCH_MAX_SCENARIOS exceeds the engine ceiling")
+        return value
+
+    @field_validator("SEARCH_MAX_COMBINATIONS")
+    @classmethod
+    def _validate_search_combinations(cls, value: int) -> int:
+        from app.search.constants import MAX_COMBINATIONS_CEILING
+
+        if value < 1:
+            raise ValueError("SEARCH_MAX_COMBINATIONS must be >= 1")
+        if value > MAX_COMBINATIONS_CEILING:
+            raise ValueError("SEARCH_MAX_COMBINATIONS exceeds the engine ceiling")
+        return value
+
+    @field_validator("SEARCH_MAX_REFINEMENT_DEPTH")
+    @classmethod
+    def _validate_search_depth(cls, value: int) -> int:
+        from app.search.constants import MAX_REFINEMENT_DEPTH_CEILING
+
+        if value < 0:
+            raise ValueError("SEARCH_MAX_REFINEMENT_DEPTH must be >= 0")
+        if value > MAX_REFINEMENT_DEPTH_CEILING:
+            raise ValueError("SEARCH_MAX_REFINEMENT_DEPTH exceeds the engine ceiling")
+        return value
+
+    @field_validator("SEARCH_TIMEOUT_SECONDS")
+    @classmethod
+    def _validate_search_timeout(cls, value: float) -> float:
+        from app.search.constants import MAX_TIMEOUT_S_CEILING, MIN_TIMEOUT_S
+
+        if not (MIN_TIMEOUT_S <= value <= MAX_TIMEOUT_S_CEILING):
+            raise ValueError("SEARCH_TIMEOUT_SECONDS is outside the allowed range")
+        return value
+
+    @field_validator("SEARCH_RATE_LIMIT_RUNS", "SEARCH_RATE_LIMIT_WINDOW_SECONDS")
+    @classmethod
+    def _validate_positive_search_rate_limit(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("search rate-limit settings must be >= 1")
         return value
 
     @model_validator(mode="after")
