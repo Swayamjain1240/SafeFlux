@@ -118,6 +118,10 @@ class Settings(BaseSettings):
     # spend money and tokens).
     AI_RATE_LIMIT_RUNS: int = 6
     AI_RATE_LIMIT_WINDOW_SECONDS: int = 300
+    # Per-user budget for POST /analyses and its comparison endpoints (Part 9):
+    # one autonomous run executes many simulations, so it is budgeted like a search.
+    ANALYSIS_RATE_LIMIT_RUNS: int = 10
+    ANALYSIS_RATE_LIMIT_WINDOW_SECONDS: int = 300
 
     # ---------------- validators ----------------
 
@@ -383,6 +387,13 @@ class Settings(BaseSettings):
     def _validate_positive_ai_rate_limit(cls, value: int) -> int:
         if value < 1:
             raise ValueError("AI rate-limit settings must be >= 1")
+        return value
+
+    @field_validator("ANALYSIS_RATE_LIMIT_RUNS", "ANALYSIS_RATE_LIMIT_WINDOW_SECONDS")
+    @classmethod
+    def _validate_positive_analysis_rate_limit(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("Analysis rate-limit settings must be >= 1")
         return value
 
     @model_validator(mode="after")

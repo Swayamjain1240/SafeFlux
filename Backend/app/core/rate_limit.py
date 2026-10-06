@@ -223,6 +223,34 @@ def _ai_limiter(request: Request) -> FixedWindowLimiter:
     )
 
 
+def _analysis_limiter(request: Request) -> FixedWindowLimiter:
+    """Per-user budget for the Part 9 analysis endpoints.
+
+    One autonomous run executes many simulations (and may spend provider
+    tokens for its summary), so like AI analysis it is budgeted per
+    authenticated user rather than per IP (rule 8).
+    """
+    settings: Settings = request.app.state.settings
+    return _server_limiter(
+        request,
+        "analysis_limiters",
+        "run",
+        settings.ANALYSIS_RATE_LIMIT_RUNS,
+        settings.ANALYSIS_RATE_LIMIT_WINDOW_SECONDS,
+    )
+
+
+async def analysis_rate_limit(request: Request, user: User = Depends(get_current_user)) -> None:
+    """Per-authenticated-user budget for POST /analyses and comparisons."""
+    _enforce(
+        _analysis_limiter(request),
+        "analysis",
+        str(user.id),
+        "Analysis",
+        "Too many analyses. Please wait and try again.",
+    )
+
+
 async def ai_rate_limit(request: Request, user: User = Depends(get_current_user)) -> None:
     """Per-authenticated-user budget for POST /investigations/run.
 

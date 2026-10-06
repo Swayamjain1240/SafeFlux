@@ -1,3 +1,4 @@
+from app.models.analysis import Analysis, AnalysisEvent
 from app.models.plant import (
     Plant,
     PlantConfig,
@@ -8,6 +9,8 @@ from app.models.plant import (
 from app.models.user import User
 
 __all__ = [
+    "Analysis",
+    "AnalysisEvent",
     "Plant",
     "PlantConfig",
     "PlantState",
