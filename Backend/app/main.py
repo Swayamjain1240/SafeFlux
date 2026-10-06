@@ -63,6 +63,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.auth_limiters = {}
     app.state.simulation_limiters = {}
+    app.state.search_limiters = {}
     app.state.telemetry = TelemetryService(
         CurrentStateStore(
             max_history=settings.TELEMETRY_MAX_HISTORY,

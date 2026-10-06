@@ -113,30 +113,69 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 # always uses that app's Settings.
 
 
-def _auth_limiter(request: Request, bucket: str) -> FixedWindowLimiter:
-    buckets: dict[str, FixedWindowLimiter] = request.app.state.auth_limiters
+def _server_limiter(
+    request: Request,
+    store_name: str,
+    bucket: str,
+    limit: int,
+    window_seconds: int,
+) -> FixedWindowLimiter:
+    """Lazily create and cache one per-app limiter bucket."""
+    buckets: dict[str, FixedWindowLimiter] = getattr(request.app.state, store_name)
     limiter = buckets.get(bucket)
     if limiter is None:
-        settings: Settings = request.app.state.settings
-        limiter = FixedWindowLimiter(
-            settings.AUTH_RATE_LIMIT_ATTEMPTS,
-            settings.AUTH_RATE_LIMIT_WINDOW_SECONDS,
-        )
+        limiter = FixedWindowLimiter(limit, window_seconds)
         buckets[bucket] = limiter
     return limiter
 
 
+def _auth_limiter(request: Request, bucket: str) -> FixedWindowLimiter:
+    settings: Settings = request.app.state.settings
+    return _server_limiter(
+        request,
+        "auth_limiters",
+        bucket,
+        settings.AUTH_RATE_LIMIT_ATTEMPTS,
+        settings.AUTH_RATE_LIMIT_WINDOW_SECONDS,
+    )
+
+
 def _simulation_limiter(request: Request) -> FixedWindowLimiter:
-    buckets: dict[str, FixedWindowLimiter] = request.app.state.simulation_limiters
-    limiter = buckets.get("run")
-    if limiter is None:
-        settings: Settings = request.app.state.settings
-        limiter = FixedWindowLimiter(
-            settings.SIM_RATE_LIMIT_RUNS,
-            settings.SIM_RATE_LIMIT_WINDOW_SECONDS,
-        )
-        buckets["run"] = limiter
-    return limiter
+    settings: Settings = request.app.state.settings
+    return _server_limiter(
+        request,
+        "simulation_limiters",
+        "run",
+        settings.SIM_RATE_LIMIT_RUNS,
+        settings.SIM_RATE_LIMIT_WINDOW_SECONDS,
+    )
+
+
+def _search_limiter(request: Request) -> FixedWindowLimiter:
+    settings: Settings = request.app.state.settings
+    return _server_limiter(
+        request,
+        "search_limiters",
+        "run",
+        settings.SEARCH_RATE_LIMIT_RUNS,
+        settings.SEARCH_RATE_LIMIT_WINDOW_SECONDS,
+    )
+
+
+def _enforce(limiter: FixedWindowLimiter, key: str, ip: str, label: str, message: str) -> None:
+    """Reject with the standard 429 envelope once a bucket is exhausted."""
+    if limiter.allow(f"{key}:{ip}"):
+        return
+    logger.warning("%s rate limit exceeded for %s", label, ip)
+    raise HTTPException(
+        status_code=429,
+        detail=message,
+        headers={"Retry-After": str(limiter.window_seconds)},
+    )
+
+
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
 
 
 async def simulation_rate_limit(request: Request) -> None:
@@ -145,15 +184,28 @@ async def simulation_rate_limit(request: Request) -> None:
     Simulation is compute-heavy, so it gets its own tight bucket independent
     of the auth buckets and the global limiter (rule 8).
     """
-    limiter = _simulation_limiter(request)
-    ip = request.client.host if request.client else "unknown"
-    if not limiter.allow(f"simulate:{ip}"):
-        logger.warning("Simulation rate limit exceeded for %s", ip)
-        raise HTTPException(
-            status_code=429,
-            detail="Too many simulation requests. Please wait and try again.",
-            headers={"Retry-After": str(limiter.window_seconds)},
-        )
+    _enforce(
+        _simulation_limiter(request),
+        "simulate",
+        _client_ip(request),
+        "Simulation",
+        "Too many simulation requests. Please wait and try again.",
+    )
+
+
+async def search_rate_limit(request: Request) -> None:
+    """Per-IP budget for POST /searches/run.
+
+    A search runs many simulations in one request, so it is the most expensive
+    endpoint in the API and gets the tightest bucket of its own (rule 8).
+    """
+    _enforce(
+        _search_limiter(request),
+        "search",
+        _client_ip(request),
+        "Search",
+        "Too many search requests. Please wait and try again.",
+    )
 
 
 async def auth_rate_limit(request: Request, bucket: str) -> None:
@@ -164,12 +216,10 @@ async def auth_rate_limit(request: Request, bucket: str) -> None:
     is exhausted. Buckets are isolated per endpoint name so failed
     logins never block session checks.
     """
-    limiter = _auth_limiter(request, bucket)
-    ip = request.client.host if request.client else "unknown"
-    if not limiter.allow(f"{bucket}:{ip}"):
-        logger.warning("Auth rate limit (%s) exceeded for %s", bucket, ip)
-        raise HTTPException(
-            status_code=429,
-            detail="Too many attempts. Please wait and try again.",
-            headers={"Retry-After": str(limiter.window_seconds)},
-        )
+    _enforce(
+        _auth_limiter(request, bucket),
+        bucket,
+        _client_ip(request),
+        f"Auth ({bucket})",
+        "Too many attempts. Please wait and try again.",
+    )
