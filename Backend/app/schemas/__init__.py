@@ -11,6 +11,7 @@ from app.schemas.simulation import (
     SensorFaultIn,
     SimulationRunRequest,
 )
+from app.schemas.investigation import InvestigationRunRequest
 from app.schemas.search import (
     SearchAxisIn,
     SearchPlanIn,
@@ -46,6 +47,7 @@ from app.schemas.plant import (
 
 __all__ = [
     "FaultIn",
+    "InvestigationRunRequest",
     "SearchAxisIn",
     "SearchPlanIn",
     "SearchRunRequest",
