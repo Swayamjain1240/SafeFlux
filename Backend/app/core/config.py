@@ -102,6 +102,23 @@ class Settings(BaseSettings):
     NEBIUS_BASE_URL: str | None = None
     NEBIUS_MODEL: str | None = None
 
+    # --- investigation agent bounds (Part 8) ---
+    # Every one of these is clamped to the engine's own ceiling in ``app/ai``, so a
+    # bad environment variable can lengthen an investigation but never uncap it.
+    AI_MAX_STEPS: int = 6
+    AI_MAX_MODEL_CALLS: int = 8
+    AI_MAX_SIMULATIONS: int = 40
+    AI_MAX_TOKENS: int = 20000
+    AI_TIMEOUT_SECONDS: float = 120.0
+    AI_MAX_OUTPUT_TOKENS: int = 700
+    AI_PROVIDER_TIMEOUT_S: float = 45.0
+    AI_PROVIDER_MAX_ATTEMPTS: int = 2
+    AI_TEMPERATURE: float = 0.0
+    # Per-user budget for POST /investigations/run (the only endpoint that can
+    # spend money and tokens).
+    AI_RATE_LIMIT_RUNS: int = 6
+    AI_RATE_LIMIT_WINDOW_SECONDS: int = 300
+
     # ---------------- validators ----------------
 
     @field_validator("DATABASE_URL")
@@ -298,6 +315,74 @@ class Settings(BaseSettings):
     def _validate_positive_search_rate_limit(cls, value: int) -> int:
         if value < 1:
             raise ValueError("search rate-limit settings must be >= 1")
+        return value
+
+    @field_validator("AI_MAX_STEPS", "AI_MAX_MODEL_CALLS", "AI_MAX_SIMULATIONS", "AI_MAX_TOKENS")
+    @classmethod
+    def _validate_ai_bounds(cls, value: int, info) -> int:
+        from app.ai.constants import (
+            MAX_MODEL_CALLS_CEILING,
+            MAX_SIMULATIONS_CEILING,
+            MAX_STEPS_CEILING,
+            MAX_TOKENS_CEILING,
+        )
+
+        ceilings = {
+            "AI_MAX_STEPS": MAX_STEPS_CEILING,
+            "AI_MAX_MODEL_CALLS": MAX_MODEL_CALLS_CEILING,
+            "AI_MAX_SIMULATIONS": MAX_SIMULATIONS_CEILING,
+            "AI_MAX_TOKENS": MAX_TOKENS_CEILING,
+        }
+        if value < 1:
+            raise ValueError("AI bounds must be >= 1")
+        if value > ceilings.get(info.field_name, 1):
+            raise ValueError("AI bound exceeds the engine ceiling")
+        return value
+
+    @field_validator("AI_MAX_OUTPUT_TOKENS")
+    @classmethod
+    def _validate_ai_output_tokens(cls, value: int) -> int:
+        from app.ai.constants import MAX_OUTPUT_TOKENS_CEILING
+
+        if value < 1 or value > MAX_OUTPUT_TOKENS_CEILING:
+            raise ValueError("AI_MAX_OUTPUT_TOKENS is outside the allowed range")
+        return value
+
+    @field_validator("AI_TIMEOUT_SECONDS")
+    @classmethod
+    def _validate_ai_timeout(cls, value: float) -> float:
+        from app.ai.constants import MAX_TIMEOUT_S_CEILING, MIN_TIMEOUT_S
+
+        if not (MIN_TIMEOUT_S <= value <= MAX_TIMEOUT_S_CEILING):
+            raise ValueError("AI_TIMEOUT_SECONDS is outside the allowed range")
+        return value
+
+    @field_validator("AI_PROVIDER_TIMEOUT_S")
+    @classmethod
+    def _validate_provider_timeout(cls, value: float) -> float:
+        if not (1.0 <= value <= 300.0):
+            raise ValueError("AI_PROVIDER_TIMEOUT_S is outside the allowed range")
+        return value
+
+    @field_validator("AI_PROVIDER_MAX_ATTEMPTS")
+    @classmethod
+    def _validate_provider_attempts(cls, value: int) -> int:
+        if value < 1 or value > 5:
+            raise ValueError("AI_PROVIDER_MAX_ATTEMPTS is outside the allowed range")
+        return value
+
+    @field_validator("AI_TEMPERATURE")
+    @classmethod
+    def _validate_temperature(cls, value: float) -> float:
+        if not (0.0 <= value <= 1.0):
+            raise ValueError("AI_TEMPERATURE is outside the allowed range")
+        return value
+
+    @field_validator("AI_RATE_LIMIT_RUNS", "AI_RATE_LIMIT_WINDOW_SECONDS")
+    @classmethod
+    def _validate_positive_ai_rate_limit(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("AI rate-limit settings must be >= 1")
         return value
 
     @model_validator(mode="after")

@@ -12,6 +12,10 @@ email-validator==2.3.0
 numpy==2.5.3
 scipy==1.18.1
 
-# Test-only
+# AI provider transport (Part 8) — promoted from test-only: the Nebius/LiteLLM-style
+# OpenAI-compatible client lives in app/ai/provider.py and needs real timeouts,
+# connection handling and typed errors. Already used by starlette's TestClient.
 httpx==0.28.1
+
+# Test-only
 pytest==9.1.1
