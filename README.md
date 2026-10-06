@@ -15,7 +15,10 @@ equipment** — no PLC/DCS actuation, no real valve or pump control, ever.
 
 ## Status
 
-Build **Part 7 of 10 — deterministic scenario search** is complete.
+Build **Part 8 of 10 — hybrid Nebius/NVIDIA Nemotron investigation agent** is implemented and
+mock-verified; the one controlled real inference runs once `NEBIUS_API_KEY` is present (see
+`Backend/.env.example`). Every part works without it: with no provider configured the
+investigation endpoint answers a clear `not_configured` document.
 
 | Area | State |
 | --- | --- |
@@ -42,9 +45,15 @@ Build **Part 7 of 10 — deterministic scenario search** is complete.
 | Allowlisted search variables + strict Pydantic schemas + hard budgets | ✅ |
 | `GET /api/v1/searches/capabilities` + `POST /api/v1/searches/run` (owner-scoped, rate-limited) | ✅ |
 | One-viewport search workspace (`/analysis/new`) with paginated, filtered evidence | ✅ |
-| Backend test suite (pytest) | ✅ 184 passing |
+| Allowlisted AI tool layer (9 tools) enforced independently of the model | ✅ |
+| Strict Pydantic validation of every model decision + safe rejection | ✅ |
+| Explicit bounded agent state machine (steps/model calls/simulations/tokens/time) | ✅ |
+| Prompt-injection defence, secret redaction and allowlisted logging | ✅ |
+| `GET /api/v1/investigations/capabilities` + `POST /api/v1/investigations/run` | ✅ |
+| Per-user AI rate limit + duplicate-run protection (409) | ✅ |
+| Backend test suite (pytest) | ✅ 288 passing |
 | Frontend unit tests (node) | ✅ 65 passing |
-| Nebius + NVIDIA Nemotron investigation agent | ⏳ Part 8 |
+| One controlled real Nebius/NVIDIA inference | ⏳ needs `NEBIUS_API_KEY` |
 | Investigation UX / hardening | ⏳ Parts 9–10 |
 
 ---
@@ -101,7 +110,7 @@ npm run dev                        # http://localhost:5173
 
 ```bash
 # Backend (from Backend/)
-python -m pytest -q -p no:warnings # 184 tests
+python -m pytest -q -p no:warnings # 288 tests
 
 # Frontend (from frontend/)
 npm run lint                       # oxlint, 0 warnings
@@ -133,7 +142,11 @@ npm run build                      # tsc --strict + vite production build
 | `TELEMETRY_MAX_HISTORY` / `TELEMETRY_MAX_PLANTS` | no | retained frames per plant / plants per process |
 | `TELEMETRY_MAX_STREAMS[_PER_PLANT|_PER_USER]` | no | concurrent SSE stream limits |
 | `TELEMETRY_REPLAY_INTERVAL_MS` / `TELEMETRY_HISTORY_DEFAULT_LIMIT` | no | stream pacing / default history size |
-| `NEBIUS_API_KEY` / `NEBIUS_BASE_URL` / `NEBIUS_MODEL` | Part 8 | AI provider — **backend only** |
+| `NEBIUS_API_KEY` / `NEBIUS_BASE_URL` / `NEBIUS_MODEL` | Part 8 | AI provider — **backend only**, never exposed to the frontend |
+| `AI_MAX_STEPS` / `AI_MAX_MODEL_CALLS` / `AI_MAX_SIMULATIONS` / `AI_MAX_TOKENS` | no (6/8/40/20000) | hard bounds for one investigation |
+| `AI_TIMEOUT_SECONDS` / `AI_MAX_OUTPUT_TOKENS` | no (120/700) | wall-clock ceiling / per-call output cap |
+| `AI_PROVIDER_TIMEOUT_S` / `AI_PROVIDER_MAX_ATTEMPTS` / `AI_TEMPERATURE` | no (45/2/0) | one provider call: timeout, retries (1..5), temperature |
+| `AI_RATE_LIMIT_RUNS` / `AI_RATE_LIMIT_WINDOW_SECONDS` | no (6/300) | per-**user** AI analysis budget |
 
 ### Frontend (`frontend/.env.example`)
 
@@ -407,6 +420,79 @@ status/variable/text filters, boundaries, influence ranking, trace). Presets are
 plans, never verdicts** — a preset that finds nothing is an honest result. On tablet/mobile
 the panes switch via tabs instead of stacking, so nothing is clipped or endlessly scrolled.
 
+## AI investigation agent (Part 8)
+
+SafeFlux can now investigate on its own, and it is **hybrid on purpose**. The division of
+labour is the whole point:
+
+| Who | Decides |
+| --- | --- |
+| **Nemotron (via Nebius Token Factory)** | *what deserves investigation*: which variable, which action, what to look at next — and how to explain the evidence afterwards |
+| **Deterministic search (Part 7)** | every numeric test value: which points to sample, where the safe/unsafe boundary is, how finely to refine it |
+| **Simulator (Part 4)** | what the process does: trajectories, peaks, events |
+| **Safety engine (Part 5)** | the threshold result: SAFE / NEAR_LIMIT / SAFEGUARD_ACTIVATED / VIOLATION |
+
+The model is a **planner and narrator, never a data source**. It cannot compute a
+temperature, set or relax a limit, decide a verdict, run shell/Python/SQL, read a file or a
+secret, change a permission, or touch real equipment. Every number in a result was produced
+by the deterministic layers, and each result carries the sentence that says so (`ai_limits`).
+
+### Endpoints
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/v1/investigations/capabilities` | provider state, tool catalogue, allowlist, resolved bounds |
+| `POST` | `/api/v1/investigations/run` | one bounded investigation over the caller's plant |
+
+### Allowlisted tools
+
+`get_plant_configuration`, `get_current_state`, `get_safety_limits`, `get_recent_history`,
+`run_simulation`, `run_scenario_search`, `compare_scenarios`, `get_failure_details`,
+`check_safeguards`. The model names an *action*; the action maps to exactly one tool, and the
+tool re-validates every argument against its own strict schema. No tool accepts an owner or
+plant id, so the plant comes only from the caller's ownership-checked context.
+
+### The loop (explicit, bounded, no framework)
+
+```text
+UNDERSTAND → IDENTIFY → CHOOSE → CALL_TOOL → OBSERVE → DECIDE → … → EXPLAIN → DONE
+```
+
+Hard bounds: `AI_MAX_STEPS`, `AI_MAX_MODEL_CALLS`, `AI_MAX_SIMULATIONS` (charged by the tool
+layer *before* anything runs), `AI_MAX_TOKENS`, `AI_TIMEOUT_SECONDS`. Hitting one is a
+reported stop reason (`max_steps`, `max_simulations`, `timeout`, `invalid_output`,
+`provider_error`, …), never a hang and never a silent truncation. Invalid model output stops
+the run safely; two consecutive refused tool calls stop it too, with the refusals kept as
+evidence.
+
+### How Nebius is used at runtime
+
+The backend reads three variables — `NEBIUS_API_KEY`, `NEBIUS_BASE_URL`, `NEBIUS_MODEL` —
+and nothing else. The key lives only in backend memory, is sent only in the `Authorization`
+header of the provider call, and never reaches the browser, a log line, a prompt or a
+response. The base URL must be `https` (or loopback), and the model id is **resolved from the
+account's own catalogue** (`GET {NEBIUS_BASE_URL}/models`) rather than hard-coded. Failures map
+to a small loggable vocabulary (`auth`, `rate_limit`, `timeout`, `connection`, `server`,
+`invalid_response`). Without all three variables the endpoint returns `not_configured` and no
+model is contacted — Parts 1–7 are unaffected.
+
+### Why the AI is not the source of physical truth
+
+A language model can be wrong, inconsistent or manipulated, so SafeFlux never asks it for a
+number, a limit or a verdict. The simulator is a deterministic lumped model — the same inputs
+always produce the same trajectory — and the safety engine compares that trajectory against
+the plant's configured limits with plain arithmetic. The model's contribution is to decide
+where to look and to explain what was found, which is why every result states both what the
+AI chose and what the deterministic layers proved, and why an unconfigured deployment is a
+fully working (if less curious) product.
+
+### Budgets, rate limiting and duplicate clicks
+
+`POST /investigations/run` is rate-limited **per authenticated user** (not per IP): it is the
+only endpoint that can spend provider money. A repeated click cannot start a second run —
+an in-flight guard answers `409 CONFLICT` for the same `(user, plant)` until the first run
+finishes, and the slot is released on every exit path.
+
 ## Security baseline
 
 ### Part 1
@@ -477,6 +563,30 @@ the panes switch via tabs instead of stacking, so nothing is clipped or endlessl
 - Validation errors never echo submitted values, and unknown field names are no longer
   reflected either — they are reported against the body instead
 - No AI anywhere in this part: no provider is contacted and no API key is required
+
+### Part 8
+
+- The provider key exists only as `SecretStr` in the backend, is used only to build the
+  `Authorization` header, and is never logged, returned, prompted or bundled to the browser
+  (the frontend has no provider reference at all)
+- A public `http://` provider URL is refused, so a mistyped environment variable cannot
+  downgrade the transport and send the key in clear text
+- The model cannot act: its only surface is an allowlisted action, arguments are re-validated
+  by the tool's own strict schema, and there is no shell, `eval`/`exec`, generated code, file
+  access, SQL or permission change anywhere in `app/ai`
+- The tool layer enforces ownership, budgets and bounds by itself, independently of anything
+  the model says or is told; cross-user investigations are impossible by construction and
+  return **404** at the API
+- Prompt injection is treated as data: text is sanitized, scanned, flagged and wrapped, and
+  the wrapper cannot be escaped by forging the closing marker
+- Logging is allowlisted — provider, model id, analysis id, latency, error category — and
+  forbidden fields (key, JWT, cookie, password, hash, Authorization, prompt) are dropped even
+  when a caller asks for them; credential-shaped strings are redacted before logging
+- Every model output is validated with Pydantic before use, and invalid output stops the run
+  with `invalid_output` instead of being retried forever
+- Bounds are hard: steps, model calls, simulations, tokens and wall-clock time, all clamped at
+  startup to engine ceilings so a bad environment variable cannot uncap a run
+- AI analysis is rate-limited per user and protected against duplicate clicks (409)
 
 ### Part 5
 

@@ -169,6 +169,10 @@ The browser never composes a search the server would reject: `draftIssues()` mir
 can only tighten. Presets are filtered against the capabilities payload, and presets encode
 a *plan*, never a verdict.
 
+Part 8 adds **no frontend module**. The investigation API is implemented and tested
+server-side, and `/analysis/:id/live` still renders its placeholder — the live investigation
+UX belongs to Part 9. Nothing in Part 8 is claimed as a UI feature.
+
 The dashboard picks a plant, polls `telemetry/current` (5s), and shows the safety state,
 seven metrics (temperature, pressure, feed flow, level, cooling, valve, pump), recent
 findings and analysis status. Live values come from the telemetry frame; when no frame
@@ -772,45 +776,108 @@ screens.
 
 ---
 
-## 21. AI Provider
+## 21. AI Provider (implemented, Part 8)
 
-Provider abstraction hides Nebius details.
-
-Required:
-
-NEBIUS_API_KEY, NEBIUS_BASE_URL, NEBIUS_MODEL.
-
-Backend only. Exact model ID verified against actual account/catalog.
-
----
-
-## 22. Agent Loop
+Nebius Token Factory is the provider: an OpenAI-compatible inference API. The client is a
+thin, validated wrapper, and the only module in the codebase that knows an external AI
+service exists.
 
 ```text
-UNDERSTAND
-→ IDENTIFY
-→ CHOOSE DIRECTION
-→ CALL ALLOWLISTED TOOL
-→ DETERMINISTIC SEARCH/SIMULATION
-→ OBSERVE
-→ NEXT ACTION
-→ COUNTERFACTUAL/SAFEGUARD
-→ EXPLAIN
+app/ai/provider.py   validate_base_url, ProviderConfig, ProviderError, NebiusProvider, build_provider
 ```
 
-Bound steps, model calls, simulations, timeout and cost.
+Required configuration — **backend only**; the frontend bundle contains no provider
+reference at all:
 
-No shell, arbitrary Python, arbitrary SQL, arbitrary files or real plant control.
+| Variable | Meaning |
+| --- | --- |
+| `NEBIUS_API_KEY` | bearer token, held as `SecretStr`, unwrapped once and used only to build the `Authorization` header |
+| `NEBIUS_BASE_URL` | endpoint root, e.g. `https://api.tokenfactory.nebius.com/v1` |
+| `NEBIUS_MODEL` | the model id, resolved from the account catalogue (below) |
+
+Rules the client enforces:
+
+- **No hard-coded model id.** The account's own catalogue is the source of truth:
+  `GET {NEBIUS_BASE_URL}/models` lists what this account can actually call, and `NEBIUS_MODEL`
+  is set from that list. A model that is public in the docs but absent from the account fails
+  as `auth`/`invalid_response` — never a silent substitution.
+- **`https`, or nothing.** A public `http://` base URL is refused before any request is made,
+  so a mistyped environment variable cannot send the key in clear text. Loopback `http` is
+  allowed for a local gateway.
+- **Errors become a vocabulary, not a stack trace:** `auth`, `rate_limit`, `timeout`,
+  `connection`, `server`, `invalid_response`. Only the category and the latency are loggable.
+- **Retries are bounded and transient-only:** a connection drop or a 5xx is retried at most
+  `AI_PROVIDER_MAX_ATTEMPTS` times; an auth or validation failure never is.
+- **The key never leaves the client** — not into a prompt, a response body, an error message or
+  a log line.
+- **Absence is a supported state.** With any of the three variables unset, `ai_configured` is
+  `false`, the endpoint answers `not_configured` and no network call happens. Parts 1–7 keep
+  working with no key at all.
 
 ---
 
-## 23. Prompt Injection
+## 22. Agent Loop (implemented, Part 8)
 
-Engineering-change text is untrusted.
+An explicit, bounded state machine — not a framework. LangGraph was considered and rejected:
+this loop is small, the states are few, and a hand-written machine is easier to bound, test
+and audit than a graph runtime.
 
-The agent must not obey attempts to reveal prompts/secrets, change tool permissions, bypass budgets or execute code.
+```text
+UNDERSTAND → IDENTIFY → CHOOSE → CALL_TOOL → OBSERVE → DECIDE → … → EXPLAIN → DONE
+```
 
-Tools independently enforce auth, ownership and numeric limits.
+```text
+app/ai/constants.py  AgentState, AgentStopReason, ProviderErrorCategory, GuardVerdict, ceilings
+app/ai/schemas.py    AgentDecision, AgentExplanation, ToolResultRecord, InvestigationResult
+app/ai/prompts.py    system / decision / explanation prompt builders (pure, sanitizing)
+app/ai/parsing.py    find_json_object, parse_decision, parse_explanation, safe_excerpt
+app/ai/tools.py      the nine allowlisted tools, ToolBudget, call_tool
+app/ai/guards.py     InFlightGuard (duplicate-run protection)
+app/ai/machine.py    InvestigationAgent.run — the state machine
+app/ai/service.py    InvestigationService — provider + budget + tools + plant context
+app/ai/deps.py       get_ai_service
+```
+
+The budget is checked at the top of every iteration, *before* it is spent. Every bound is hard
+and clamped at startup to an engine ceiling: `AI_MAX_STEPS`, `AI_MAX_MODEL_CALLS`,
+`AI_MAX_SIMULATIONS`, `AI_MAX_TOKENS`, `AI_TIMEOUT_SECONDS`. Model calls and simulations are
+charged by the **tool layer**, so a model that keeps asking for the same expensive tool runs
+out of budget instead of looping. Reaching a bound is a **reported stop reason** — `completed`,
+`max_steps`, `max_model_calls`, `max_simulations`, `max_tokens`, `timeout`, `invalid_output`,
+`duplicate`, `provider_error` — never a hang and never an unmarked truncation.
+
+What the model may do: choose one action per iteration from a closed enum, mapped to exactly
+one tool by `TOOL_FOR_ACTION`. What it may not do: anything else. `app/ai` contains no shell,
+no `eval`/`exec`, no generated Python, no SQL, no file access, no permission change, and no
+path to a secret or to real equipment. The tool layer re-validates every argument against its
+own strict schema, so an invented variable, an out-of-range value or an extra field is
+refused; two consecutive refusals stop the run, with the refusals preserved as evidence.
+
+---
+
+## 23. Prompt Injection (implemented, Part 8)
+
+Engineering-change text, plant names and notes — anything the user or the plant supplies — is
+untrusted **data**. It is something to reason about, never something to obey.
+
+Defence in depth:
+
+1. **Sanitize** — `sanitize_untrusted_text` drops control characters, collapses whitespace and
+   truncates to a bounded length, so hostile text cannot reshape the prompt structure.
+2. **Detect and record** — `detect_injection` matches named patterns ("ignore your
+   instructions", "reveal your system prompt", "reveal the API key", "run a shell command",
+   "bypass search limits", "act as …", "you are now …", "disregard the above"). A hit is
+   recorded as evidence — never obeyed, never hidden — and the machine scans the goal itself
+   rather than trusting a caller to have done it.
+3. **Wrap** — `wrap_untrusted` delimits untrusted text with markers, and a forged closing marker
+   inside the text is neutralised, so the text cannot pretend to be the framework.
+4. **Constrain the output** — the decision schema is strict: action from a closed enum,
+   variables from the allowlist, bounded arguments, `extra="forbid"`. Anything else is
+   `invalid_output` and stops the run; there is no best-effort parse of a decision.
+5. **Enforce independently** — the tool layer ignores what the prompt said. It checks
+   authorization, ownership, the variable allowlist, argument ranges and the budget on its own.
+   Even a fully persuaded model cannot exceed a bound, reach another user's plant or read a
+   secret, because none of those is expressible as a tool call.
 
 ---
 
@@ -845,13 +912,27 @@ allowlist mirror, per-mode axis counts, preset filtering by server capabilities,
 building, optional-budget forwarding, every rejection the UI must explain, NaN-free parsing,
 failure filtering and clamped pagination.
 
-Backend tests (`Backend/tests`, 184 passing) cover the Part 7 engine
+Backend tests (`Backend/tests`, 288 passing) cover the Part 7 engine
 (`test_search.py`: deterministic linspaces, safe-end-first traversal, bisection only when
 monotonic, densify otherwise, repeatability, combination caps, the scenario budget, the
 injectable-clock timeout, no value echo) and the API (`test_search_api.py`: capabilities, a
 seeded unsafe region discovered by a sweep, refined boundary, reproducibility, sensitivity,
 bounded combinations, auth, cross-user `404`, invalid and malicious values, oversized-search
-rejection, and the `429` bucket).
+rejection, and the `429` bucket) — plus Part 8:
+
+```text
+test_ai_security.py        sanitizer, injection patterns, marker forgery, redaction, log allowlist
+test_ai_parsing.py         balanced-JSON extraction, malformed output, curated reasons
+test_ai_provider.py        config/URL validation, error mapping, one bounded retry, no key leaked
+test_ai_tools.py           per-tool arg schemas, refusals, budget charging, payload ceiling
+test_ai_agent.py           loop bounds, stop reasons, refusals as evidence, goal injection
+test_investigations_api.py capabilities, run, not-configured, 409 duplicate, cross-user 404
+```
+
+`Backend/tests/ai_fakes.py` holds the shared fakes — notably `ScriptedProvider`, which records
+every model call, prompt and system prompt. The provider is the **only** thing faked: the
+simulator, safety engine and search engine running behind the tools are the real
+deterministic ones, and no test needs a network or a key.
 
 Layout is checked beyond the unit tests by driving the running app in a browser and
 measuring the real DOM at each brief target size: document and `main` scroll heights (must
@@ -863,10 +944,10 @@ Unit:
 auth utilities, simulator equations, safety, safeguards, scenario validation, boundary search, provider parsing.
 
 Integration:
-auth/session, plant ownership, simulation→safety, search→simulation, telemetry auth, agent tools, provider.
+auth/session, plant ownership, simulation→safety, search→simulation, telemetry auth, agent tools, provider, investigation run (Part 8).
 
 Security:
-cross-user access, malformed input, compute abuse, rate limits, XSS content, invalid auth, prompt injection, malformed AI output.
+cross-user access, malformed input, compute abuse, rate limits, XSS content, invalid auth, prompt injection, malformed AI output, forged wrapper markers, oversized AI tool payloads, duplicate AI runs.
 
 Seeded:
 safe baseline, cooling loss, outlet restriction, feed increase, hidden combined failure, successful safeguard, late safeguard.
