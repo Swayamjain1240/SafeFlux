@@ -732,10 +732,30 @@ As of 2026-10-06:
   owner-scoped and rate-limited on the tightest bucket; `/analysis/new` is the one-viewport
   search workspace. Backend tests 184 passing; frontend unit tests 65 passing. The seeded
   unsafe region is discovered automatically: no engineer types 100/110/120/130.
+- **Part 8** (Nebius + NVIDIA Nemotron investigation agent) implemented and mock-verified — the
+  pre-flight contract was answered before any provider code (Nebius Token Factory;
+  `NEBIUS_API_KEY`; `NEBIUS_BASE_URL`; `NEBIUS_MODEL`; purpose = investigation planner and
+  narrator; **backend only**), and **no model id is hard-coded**: it is resolved from the
+  account's own catalogue. Nemotron decides *what deserves investigation*; the Part 7 search
+  still decides every numeric test value, the simulator decides the process response, and the
+  safety engine decides the threshold result. The model's only surface is one action per
+  iteration from a closed enum, mapped to exactly one of nine allowlisted tools whose arguments
+  are independently re-validated; there is no shell, `eval`/`exec`, generated code, file access,
+  SQL, permission change, secret access or real plant control anywhere in `app/ai`. Bounds
+  (steps, model calls, simulations, tokens, wall clock) are hard and clamped at startup;
+  reaching one is a reported stop reason. Untrusted engineering-change text is sanitized,
+  scanned for injection, recorded and wrapped so it can never be obeyed or escaped. The API is
+  `GET /api/v1/investigations/capabilities` + `POST /api/v1/investigations/run`, owner-scoped,
+  rate-limited per authenticated user and protected against duplicate clicks (`409`). Backend
+  tests 288 passing; frontend unit tests 65 passing; Part 8 adds no frontend module (the live
+  investigation UX is Part 9). **The one controlled real inference has not run yet** because
+  `Backend/.env` does not exist on this machine — nothing about the real model has been claimed.
 
 ### Next action
 
-Part 8 — Nebius + NVIDIA Nemotron investigation agent — but **no provider code before the
-pre-flight confirmation**: provider, API key, env/base-URL/model variables, purpose,
-backend-only, an eligible Nemotron model verified against the actual account/catalog, and an
-explicit request for the API key (rule 22). The Part 7 search stays the numeric authority.
+Create `Backend/.env` with non-empty `NEBIUS_API_KEY`, `NEBIUS_BASE_URL` and `NEBIUS_MODEL`
+(the key stays out of chat and out of Git), resolve the exact account-eligible Nemotron model
+id from `GET {NEBIUS_BASE_URL}/models`, then run **one** controlled investigation through
+`POST /api/v1/investigations/run` and confirm a real model decision, a real tool call and real
+deterministic evidence. That closes Part 8; Part 9 then owns the live investigation / reverify /
+report UX.

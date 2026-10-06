@@ -4,7 +4,143 @@
 
 ---
 
-# Current Checkpoint — 2026-10-06 · PART 7 COMPLETE
+# Current Checkpoint — 2026-10-06 · PART 8 IMPLEMENTED, REAL INFERENCE PENDING KEY
+
+**Status:** 🟡 Part 8 (hybrid Nebius/Nemotron investigation agent) implemented, documented and
+verified against a scripted provider — the one controlled **real** inference has not run
+yet, because `Backend/.env` does not exist on this machine.
+**Project:** SafeFlux — Autonomous Process-Safety Failure Hunter
+**Track:** Best Apps & Agents
+
+## Part 8 — pre-flight contract (answered before any provider code)
+
+| Question | Answer |
+| --- | --- |
+| Provider | Nebius Token Factory (OpenAI-compatible inference API) |
+| API key required | yes — for the AI step only; every other part works without one |
+| Environment variable | `NEBIUS_API_KEY` |
+| Base URL variable | `NEBIUS_BASE_URL` |
+| Model variable | `NEBIUS_MODEL` |
+| Purpose | investigation **planner and narrator** — never a source of numbers or verdicts |
+| Backend or frontend | **backend only**; the frontend bundle contains no provider reference |
+
+**No model id is hard-coded.** The account's own catalogue
+(`GET {NEBIUS_BASE_URL}/models`) is the source of truth and `NEBIUS_MODEL` is set from it, so a
+model documented publicly but absent from the account cannot be silently substituted.
+
+## What is complete (Part 8)
+
+### Division of labour (the whole point)
+
+**Nemotron** decides *what deserves investigation* — which variable, which action, what to
+look at next — and explains the evidence afterwards. The **deterministic search (Part 7)**
+decides every numeric test value and where the boundary is; the **simulator (Part 4)** decides
+what the process does; the **safety engine (Part 5)** decides the threshold result. Every
+result carries the sentence that states this, so the model can never be mistaken for the
+source of physical truth.
+
+### Modules (14 commits)
+
+- `app/ai/constants.py` — hard ceilings, `AgentState`, `AgentStopReason`,
+  `ProviderErrorCategory`, `GuardVerdict`, the log allowlist/denylist, `AI_DISCLAIMER`.
+- `app/ai/schemas.py` — strict `AgentDecision` (closed action enum, `TOOL_FOR_ACTION`,
+  allowlisted `variables`, bounded `arguments`, `extra="forbid"`), `AgentExplanation`,
+  `ToolResultRecord`, `InvestigationBudgetState`, `InvestigationResult`.
+- `app/ai/security.py` — untrusted-text sanitizer, 8 named injection patterns, marker wrapper
+  that survives a forged closing marker, secret redaction (JWT/bearer/`sk-…`/long tokens, with
+  exemptions so a plain UUID is not mangled), allowlisted `log_event`.
+- `app/ai/prompts.py` — pure prompt builders; untrusted text is always wrapped as data.
+- `app/ai/parsing.py` — string-aware balanced-JSON extraction, strict decision parse (invalid
+  output is *rejected*, never repaired into a guess), curated value-free explanation parse.
+- `app/ai/provider.py` — `validate_base_url` (https or loopback only), `ProviderConfig` from
+  settings (the `SecretStr` key is unwrapped exactly once), bounded retries for transient
+  failures only, `ProviderError.to_dict()` as a loggable vocabulary.
+- `app/ai/tools.py` — the nine allowlisted tools (`get_plant_configuration`, `get_current_state`,
+  `get_safety_limits`, `get_recent_history`, `run_simulation`, `run_scenario_search`,
+  `compare_scenarios`, `get_failure_details`, `check_safeguards`), each with its own strict
+  argument model, plus `ToolBudget` charged *before* work, `call_tool` re-validating everything
+  and rejecting oversized payloads by raw handler output size.
+- `app/ai/guards.py` — `InFlightGuard` releasing on every exit path.
+- `app/ai/machine.py` — `InvestigationAgent.run`: explicit state machine, budget checked before
+  each iteration, refusals kept as evidence, two consecutive refusals stop the run, the goal
+  text is scanned for injection by the machine itself.
+- `app/ai/service.py` + `deps.py` — provider + budget + tools + plant context behind
+  `get_ai_service`; an unconfigured deployment returns `not_configured` without touching the
+  network.
+
+### API, budgets and rate limiting (commits 15–17)
+
+- `GET /api/v1/investigations/capabilities` — provider state, tool catalogue, allowlist,
+  resolved bounds.
+- `POST /api/v1/investigations/run` — verified session, `get_owned_or_404` (cross-user → `404`),
+  strict request schema, own rate-limit bucket keyed by **authenticated user** (not IP), and
+  `409` for a duplicate click while a run for that `(user, plant)` is in flight.
+- `AI_MAX_STEPS`, `AI_MAX_MODEL_CALLS`, `AI_MAX_SIMULATIONS`, `AI_MAX_TOKENS`,
+  `AI_TIMEOUT_SECONDS`, `AI_PROVIDER_TIMEOUT_S`, `AI_PROVIDER_MAX_ATTEMPTS`, `AI_TEMPERATURE`,
+  `AI_RATE_LIMIT_RUNS`, `AI_RATE_LIMIT_WINDOW_SECONDS` — each clamped at startup to an engine
+  ceiling by per-field validators, so a bad environment variable cannot uncap a run.
+- `httpx` promoted from a test-only to a runtime dependency (it was already the HTTP client in
+  use); nothing new was installed.
+
+### Tests (commits 18–19)
+
+`test_ai_security.py`, `test_ai_parsing.py`, `test_ai_provider.py`,
+`test_ai_tools.py`, `test_ai_agent.py`, `test_investigations_api.py` — valid structured output,
+invalid output, malformed JSON, tool rejection, budget exhaustion, provider down / rate limit /
+timeout mapping, max agent steps, prompt injection, cross-user analysis, duplicate run. The
+provider is the only thing faked (`ScriptedProvider` records every call, prompt and system
+prompt); the simulator, safety engine and search engine inside the tools are the real ones.
+
+### Real bugs found and fixed while building Part 8
+
+1. Secret redaction missed a bare `sk-live-…` credential — added a token-shape pattern and
+   exemptions so identifiers stay readable.
+2. `compare_scenarios` silently sorted caller-supplied values, which could sign-flip the
+   comparison — it now returns an explicitly ordered `lower`/`upper` pair.
+3. `check_safeguards` was missing from the expensive-action set, so it was not budget-charged.
+4. Pydantic copies list fields, so writing the trace *after* building the result document
+   dropped the `DONE` state — the trace is now written before construction.
+5. An injected provider factory was blocked by the not-configured gate, which made the whole
+   mock-test path unreachable; `gate_on_settings` separates the two concerns.
+6. The oversized-payload guard was unreachable because it measured the request rather than the
+   raw handler output — it now measures the handler's bytes.
+
+### Checks
+
+- Backend: **288** pytest tests passing (exit 0), of which 104 are Part 8.
+- Frontend: **65** node tests still passing, `oxlint` clean, `tsc -b && vite build` OK.
+- Part 8 adds **no frontend module**: `/analysis/:id/live` still renders its placeholder and the
+  live investigation UX belongs to Part 9. Nothing in Part 8 is claimed as a UI feature.
+- Provider secrets: `Backend/.env` is git-ignored and absent; only `.env.example` is tracked and
+  its three AI values are empty. No key appears in any tracked file or in Git history.
+
+### Git
+
+Part 8 is 21 commits on `main` (19 implementation/test, 2 documentation), each a coherent
+change with the required trailer, no push.
+
+## Blocked
+
+**The one controlled real inference cannot run yet.** `Backend/.env` does not exist on this
+machine (checked repeatedly: the only env files present are `Backend/.env.example` and
+`frontend/.env.example`, and the AI values in the example are empty). No key was ever pasted
+in chat and no key is fabricated here. The real step needs a local `Backend/.env` with
+non-empty `NEBIUS_API_KEY`, `NEBIUS_BASE_URL` and `NEBIUS_MODEL` — the key must **not** be
+pasted into the chat.
+
+## Next action
+
+1. User creates `Backend/.env` with the three variables (key never in chat).
+2. List `GET {NEBIUS_BASE_URL}/models`, filter for the Nemotron family, and record the exact
+   **account-eligible** model id in `NEBIUS_MODEL` only.
+3. Run one controlled investigation through `POST /api/v1/investigations/run` against a plant
+   with a seeded weakness, and confirm a real model decision, a real tool call and real
+   deterministic evidence — then Part 8 is genuinely complete.
+4. Part 9 — live investigation / reverify / report UX.
+
+---
+
+# Checkpoint — 2026-10-06 · PART 7 COMPLETE
 
 **Status:** 🟢 Part 7 (Deterministic Scenario Search) implemented, tested and verified live  
 **Project:** SafeFlux — Autonomous Process-Safety Failure Hunter  
