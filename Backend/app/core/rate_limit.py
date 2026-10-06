@@ -2,8 +2,10 @@
 
 Two layers:
 1. `RateLimitMiddleware` — global per-IP budget over /api/v1/*.
-2. `auth_rate_limit(bucket)` — tighter per-IP budgets for sensitive auth
-   endpoints (signup/login), read from Settings.
+2. Per-endpoint dependencies — tighter, isolated buckets: `auth_rate_limit(bucket)`
+   (signup/login, per IP), `simulation_rate_limit` (per IP), `search_rate_limit`
+   (per IP) and `ai_rate_limit` (per authenticated **user**, because AI analysis is
+   the only endpoint that can spend provider money; rule 8 of Part 8).
 
 Health checks are exempt from the global limiter so monitoring is never
 throttled. Hard-bounded memory: stale keys are purged and the table is
@@ -18,13 +20,15 @@ import threading
 import time
 from collections import deque
 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.auth.dependencies import get_current_user
 from app.core.config import Settings
 from app.core.responses import error_response
+from app.models import User
 
 logger = logging.getLogger("safeflux.ratelimit")
 
@@ -205,6 +209,34 @@ async def search_rate_limit(request: Request) -> None:
         _client_ip(request),
         "Search",
         "Too many search requests. Please wait and try again.",
+    )
+
+
+def _ai_limiter(request: Request) -> FixedWindowLimiter:
+    settings: Settings = request.app.state.settings
+    return _server_limiter(
+        request,
+        "ai_limiters",
+        "run",
+        settings.AI_RATE_LIMIT_RUNS,
+        settings.AI_RATE_LIMIT_WINDOW_SECONDS,
+    )
+
+
+async def ai_rate_limit(request: Request, user: User = Depends(get_current_user)) -> None:
+    """Per-authenticated-user budget for POST /investigations/run.
+
+    This is the only endpoint that can spend money and model tokens, so it is
+    budgeted per *user* rather than per IP: one engineer cannot exhaust the
+    provider quota for everyone else behind the same address, and a shared
+    office IP does not throttle unrelated users (rule 8 of Part 8).
+    """
+    _enforce(
+        _ai_limiter(request),
+        "analysis",
+        str(user.id),
+        "AI analysis",
+        "Too many AI analyses. Please wait and try again.",
     )
 
 
