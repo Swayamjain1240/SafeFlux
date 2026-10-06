@@ -113,10 +113,15 @@ def run_search(
     limits: SearchLimits,
     settings: object | None = None,
     runner=None,
+    budget: SearchBudget | None = None,
 ) -> SearchRun:
-    """Run one bounded, deterministic search."""
+    """Run one bounded, deterministic search.
+
+    ``budget`` may be supplied to inject a clock (used by tests to exercise the
+    timeout path); production always builds one from the resolved limits.
+    """
     thresholds = _resolve_thresholds(profile, spec, settings)
-    budget = SearchBudget(limits=limits)
+    budget = budget or SearchBudget(limits=limits)
     sim_limits = SimulationLimits(
         max_duration_s=limits.max_duration_s,
         min_time_step_s=limits.min_time_step_s,

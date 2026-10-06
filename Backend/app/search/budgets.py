@@ -17,6 +17,7 @@ from __future__ import annotations
 import math
 import time
 from dataclasses import dataclass, field
+from typing import Callable
 
 from app.search.constants import (
     DEFAULT_MAX_COMBINATIONS,
@@ -170,16 +171,24 @@ def resolve_limits(settings: object | None = None) -> SearchLimits:
 
 @dataclass
 class SearchBudget:
-    """Runtime counter charged before every simulated scenario."""
+    """Runtime counter charged before every simulated scenario.
+
+    ``clock`` is injectable so the timeout path is testable without waiting for
+    real seconds to pass; production always uses the wall clock.
+    """
 
     limits: SearchLimits
-    started_at: float = field(default_factory=time.monotonic)
+    clock: Callable[[], float] = time.monotonic
     scenarios: int = 0
     #: Set when a limit stopped the search (``scenarios`` or ``timeout``).
     exceeded: str | None = None
+    started_at: float = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self.started_at = self.clock()
 
     def elapsed_s(self) -> float:
-        return time.monotonic() - self.started_at
+        return self.clock() - self.started_at
 
     def remaining_scenarios(self) -> int:
         return max(0, self.limits.max_scenarios - self.scenarios)

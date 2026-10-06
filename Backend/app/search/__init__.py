@@ -54,6 +54,7 @@ from app.search.variables import (
     SearchVariable,
     VariableSpec,
     capabilities,
+    spec_for,
 )
 
 __all__ = [
@@ -95,6 +96,7 @@ __all__ = [
     "run_search",
     "run_sensitivity",
     "run_sweep",
+    "spec_for",
     "supports_bisection",
     "versions",
 ]
