@@ -76,6 +76,14 @@ EVENT_LABELS: dict[str, str] = {
 MAX_STORED_CASES = 400
 MAX_STORED_EVENTS = 600
 MAX_STORED_FAILURES = 25
+MAX_STORED_TIMELINE = 120
+MAX_STORED_SERIES_PER_CASE = 6
+#: Per-run comparisons: each counterfactual/rereun is a full simulation, so the
+#: count is small and deliberate, like the agent's own simulation budget.
+MAX_COUNTERFACTUALS = 4
+MAX_VARIANTS_PER_VARIABLE = 3
+#: Mitigation keys are allowlisted; the bound guards the stored document only.
+MAX_MITIGATION_KEY_CHARS = 40
 
 #: Required language. A simulation can only speak about what it simulated.
 NO_UNSAFE_DETECTED_NOTE = (
@@ -94,6 +102,16 @@ SAFEGUARD_LANGUAGE_NOTE = (
     "behaviour of a real plant."
 )
 
+#: Simulator series the failure page draws (all produced by the Part 4 engine).
+SERIES_KEYS = (
+    "time_s",
+    "level_pct",
+    "true_temperature_c",
+    "true_pressure_bar",
+    "outlet_flow_lpm",
+    "feed_flow_lpm",
+)
+
 __all__ = [
     "AI_NOT_CONFIGURED_NOTE",
     "ANALYSIS_DISCLAIMER",
@@ -101,9 +119,14 @@ __all__ = [
     "AnalysisKind",
     "AnalysisStatus",
     "EVENT_LABELS",
+    "MAX_COUNTERFACTUALS",
+    "MAX_MITIGATION_KEY_CHARS",
     "MAX_STORED_CASES",
     "MAX_STORED_EVENTS",
     "MAX_STORED_FAILURES",
+    "MAX_STORED_SERIES_PER_CASE",
+    "MAX_STORED_TIMELINE",
+    "MAX_VARIANTS_PER_VARIABLE",
     "NO_UNSAFE_DETECTED_NOTE",
     "SAFEGUARD_LANGUAGE_NOTE",
     "UNSAFE_DETECTED_NOTE",
