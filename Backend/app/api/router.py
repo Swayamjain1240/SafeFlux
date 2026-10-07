@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.routes import (
+    analyses,
     auth,
     health,
     investigations,
@@ -20,3 +21,4 @@ api_router.include_router(simulations.router, tags=["simulations"])
 api_router.include_router(telemetry.router, tags=["telemetry"])
 api_router.include_router(searches.router, tags=["searches"])
 api_router.include_router(investigations.router, tags=["investigations"])
+api_router.include_router(analyses.router, tags=["analyses"])
