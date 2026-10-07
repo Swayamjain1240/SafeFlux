@@ -899,6 +899,71 @@ AI explanations cannot overwrite deterministic values.
 
 ---
 
+## 24a. Autonomous Analysis (implemented, Part 9)
+
+One analysis is one bounded, autonomous run over an owned plant. Everything the UI shows is
+**recorded reality**: each `AnalysisEvent` row is written by the code that actually did the
+work (with the real elapsed time), and the stored `result` document is assembled only from
+Part 4/5/7 outputs. Nothing is replayed from timers.
+
+### Domain
+
+- `app/analyses/constants.py` — `AnalysisKind` (auto / counterfactual / reverify),
+  `AnalysisStatus` (running / complete / failed / **interrupted** — the honest state after a
+  process restart), the 12 event kinds with their human labels, storage bounds
+  (≤400 cases, ≤600 events, ≤25 failures per document) and the fixed verdict language
+  ("No unsafe condition was detected within the tested simulation scenarios.").
+- `app/analyses/events.py` — `EventRecorder`: monotonically numbered events, injected clock
+  for tests, `elapsed_s` from the injected clock (never wall-clock guesses).
+- `app/analyses/interpret.py` — deterministic goal interpretation (keyword→variable mapping)
+  producing the *interpreted change* shown before/while a run starts. No AI involved.
+- `app/analyses/runner.py` — the pipeline itself: understand → map → plan → run → observe →
+  refine → find violations → counterfactuals (original / restore cooling / restore outlet /
+  reduce feed) → safeguard check → optional AI summary → complete. Every stage emits a real
+  event; the document stores bounded cases, failures, counterfactual rows, safeguard timings,
+  versions and notes.
+- `app/analyses/service.py` — transaction, duplicate guard (409 on a concurrent run for the
+  same plant), failure marking, and the interrupted-run reconciliation.
+- `app/analyses/pipeline.py` — pure builders: `failure_detail` (trajectories via a real
+  re-simulation, configured limits, first violation, peaks, safeguard events, search
+  context), `locate_failure` (exact key match only), `build_reverify_document` (per-failing-
+  case before/after rows from real re-runs; verdict drawn only from the fixed strings).
+- `app/analyses/summary.py` — the optional AI narration, stored **separately** from the
+  simulation evidence; unconfigured provider ⇒ empty explanation + a stated note.
+- `app/analyses/pdf.py` — dependency-free multi-page PDF writer; every text field escaped.
+
+### API
+
+`POST /analyses/run` (rate-limited per user, 409 on duplicates), `GET /analyses` (paginated,
+page_size ≤ 50), `GET /analyses/{id}` / `/events?after_seq=` / `/result`,
+`GET /analyses/{id}/failures/{failure_id}` (real re-simulation for the page),
+`POST /analyses/{id}/reverify` (allowlisted mitigations with bounds, re-runs only the parent's
+failing cases), `GET /analyses/{id}/report` and `GET /analyses/{id}/report.pdf`.
+
+Every id is resolved through `get_owned_or_404`: another user's analysis, failure, scenario,
+history item, report or reverification is a 404 (covered by the cross-user IDOR test).
+
+### Frontend
+
+`/analysis/new` (goal → interpreted change → FIND HIDDEN RISKS, duplicate-safe),
+`/analysis/:id/live` (cursor-polled real events, event-step navigator),
+`/analysis/:id/failures/:failureId`, `/analysis/:id/investigation` (SIMULATION EVIDENCE vs
+AI EXPLANATION), `/analysis/:id/safeguards` (trigger/response/violation in the required
+language), `/analysis/:id/reverify` (mitigation form → before/after), `/history` (paginated),
+`/reports/:id` (Overview / Scenarios / Failures / Counterfactuals / Safeguards / Evidence tabs
++ PDF download). One-viewport holds on every interactive screen; the PDF is the multi-page
+exception because it is an export, not a screen.
+
+### Tests
+
+`tests/test_analyses_pipeline.py` (16 unit tests: recorder clocking, interpretation,
+document builders, PDF escaping/structure, verdict language) and `tests/test_analyses_api.py`
+(15 endpoint tests: full workflow with the real simulator, no-failure language, events cursor,
+409 duplicate, rate limit per user, sanitization, mitigation bounds, IDOR across every object,
+history scoping). Backend total: **326 passing**.
+
+---
+
 ## 25. Testing
 
 Frontend unit tests (Part 6) cover the pure modules under the Node test runner

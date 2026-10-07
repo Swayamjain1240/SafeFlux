@@ -15,10 +15,11 @@ equipment** — no PLC/DCS actuation, no real valve or pump control, ever.
 
 ## Status
 
-Build **Part 8 of 10 — hybrid Nebius/NVIDIA Nemotron investigation agent** is implemented and
-mock-verified; the one controlled real inference runs once `NEBIUS_API_KEY` is present (see
-`Backend/.env.example`). Every part works without it: with no provider configured the
-investigation endpoint answers a clear `not_configured` document.
+Build **Part 9 of 10 — autonomous analysis, safeguard and re-verification UX** is implemented
+and test-verified end to end: the backend runs the real pipeline (goal → plan → search →
+observe → refine → counterfactuals → safeguard check → stored report) and the frontend walks
+the full engineer workflow over that recorded reality. The Part 8 real Nebius inference is
+still pending `NEBIUS_API_KEY`; every part works without it.
 
 | Area | State |
 | --- | --- |
@@ -51,10 +52,20 @@ investigation endpoint answers a clear `not_configured` document.
 | Prompt-injection defence, secret redaction and allowlisted logging | ✅ |
 | `GET /api/v1/investigations/capabilities` + `POST /api/v1/investigations/run` | ✅ |
 | Per-user AI rate limit + duplicate-run protection (409) | ✅ |
-| Backend test suite (pytest) | ✅ 288 passing |
+| Autonomous analysis domain (run/events/result models + per-user budget) | ✅ |
+| Real-event pipeline: goal → plan → search → observe → refine → counterfactuals → safeguards | ✅ |
+| `GET/POST /api/v1/analyses/*` (run, history, events, result, failure detail, reverify, report, PDF) | ✅ |
+| One-viewport analysis workspace v2: goal → interpreted change → FIND HIDDEN RISKS | ✅ |
+| Live investigation page: real backend events with a step navigator (no fake timers) | ✅ |
+| Failure detail: trajectories, configured limits, first violation, peaks, safeguard events | ✅ |
+| Investigation page: counterfactual SIMULATION EVIDENCE vs AI EXPLANATION | ✅ |
+| Safeguard page: trigger / response / violation times in required language | ✅ |
+| Reverify: bounded mitigation form → re-run affected scenarios → before/after | ✅ |
+| Paginated history + tabbed interactive report + multi-page PDF download | ✅ |
+| Backend test suite (pytest) | ✅ 326 passing |
 | Frontend unit tests (node) | ✅ 65 passing |
 | One controlled real Nebius/NVIDIA inference | ⏳ needs `NEBIUS_API_KEY` |
-| Investigation UX / hardening | ⏳ Parts 9–10 |
+| Hardening / deployment / audit | ⏳ Part 10 |
 
 ---
 
@@ -512,6 +523,83 @@ fully working (if less curious) product.
 only endpoint that can spend provider money. A repeated click cannot start a second run —
 an in-flight guard answers `409 CONFLICT` for the same `(user, plant)` until the first run
 finishes, and the slot is released on every exit path.
+
+## Autonomous analysis + safeguard/re-verify UX (Part 9)
+
+Part 9 closes the end-user workflow: one analysis is one bounded, autonomous run over an
+owned plant, and every page reads that run's **recorded reality** — each event row is written
+by the code that actually did the work, with the real elapsed time. Nothing is replayed from
+timers and no event exists that no code produced.
+
+### The pipeline (all stages emit real events)
+
+```text
+goal → understand change → map equipment → plan → run scenarios → observe
+     → refine boundary → find violations → run counterfactuals → check safeguards
+     → (optional AI explanation) → complete, with a stored evidence document
+```
+
+The scenario values, boundary refinement, trajectories, peaks and safeguard timings come from
+the Part 7 search, Part 4 simulator and Part 5 safety/safeguard engines. The optional AI
+explanation (Part 8) narrates that evidence and is always stored *separately* from it: pages
+label the two blocks SIMULATION EVIDENCE and AI EXPLANATION, and an unconfigured provider
+leaves the explanation empty with a note saying exactly that.
+
+### Endpoints
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/v1/analyses/run` | one autonomous analysis (goal → events → document) |
+| `GET` | `/api/v1/analyses` | paginated history for the session user (max page 50) |
+| `GET` | `/api/v1/analyses/{id}` | one stored analysis (metadata + headline counts) |
+| `GET` | `/api/v1/analyses/{id}/events` | the real pipeline events (`?after_seq=` cursor) |
+| `GET` | `/api/v1/analyses/{id}/result` | the stored evidence document |
+| `GET` | `/api/v1/analyses/{id}/failures/{failure_id}` | one failure's full evidence page |
+| `POST` | `/api/v1/analyses/{id}/reverify` | re-run the failing cases under mitigations |
+| `GET` | `/api/v1/analyses/{id}/report` | interactive-report payload (tabs read this) |
+| `GET` | `/api/v1/analyses/{id}/report.pdf` | the same report as a multi-page PDF |
+
+### The pages
+
+- **`/analysis/new`** — describe the change, review the *interpreted change* before starting,
+  then FIND HIDDEN RISKS. A repeated click or a second concurrent run on the same plant is
+  answered `409`, not double-billed.
+- **`/analysis/:id/live`** — the live timeline of the *actual* backend events, polled by
+  cursor, with an event-step navigator and a paper-trail (event kind + real elapsed time).
+- **`/analysis/:id/failures/:failureId`** — scenario parameters, temperature / pressure /
+  level trajectories, configured limits, first violation, peaks and safeguard events.
+- **`/analysis/:id/investigation`** — counterfactual comparisons (original / restore cooling /
+  restore outlet / reduce feed) with the simulated verdicts and the clearly separated AI
+  explanation.
+- **`/analysis/:id/safeguards`** — trigger, response and violation times in the required
+  language: "Safeguard response occurred after the simulated violation" — never a claim about
+  a real plant.
+- **`/analysis/:id/reverify`** — change a simulated mitigation (shutdown delay, cooling
+  capacity, operating target, feed/outlet/cooling factors) and re-run the affected scenarios;
+  the before/after table states only what was tested.
+- **`/history`** — paginated analyses (no endless page).
+- **`/reports/:id`** — the interactive report in tabs (Overview / Scenarios / Failures /
+  Counterfactuals / Safeguards / Evidence) plus the downloadable PDF. The one-viewport rule
+  applies to the interactive screens; the exported PDF may be multi-page.
+
+### Required language (enforced in code)
+
+The verdict strings a reverify or no-failure run may carry are fixed constants:
+
+> No unsafe condition was detected within the tested simulation scenarios.
+
+Never "this configuration is guaranteed safe"; never a claim about a real plant. The frontend
+mirrors the backend's constant wording instead of inventing its own.
+
+### Security posture (Part 9 additions)
+
+- every id is resolved through ownership: another user's analysis, failure, scenario, history
+  item, report or reverification is a **404** (IDOR-tested),
+- `POST /analyses/run` and `/reverify` are rate-limited **per authenticated user**, and a
+  duplicate click cannot run two analyses on one plant at once (409),
+- goal text is sanitized (trimmed, flattened, bounded) before storage and rendered safely,
+- reverify mitigations are an allowlist with per-key bounds, checked before any simulation,
+- PDF rendering is dependency-free and escapes all text fields; responses are `no-store`.
 
 ## Security baseline
 

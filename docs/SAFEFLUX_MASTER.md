@@ -746,17 +746,32 @@ As of 2026-10-06:
   reaching one is a reported stop reason. Untrusted engineering-change text is sanitized,
   scanned for injection, recorded and wrapped so it can never be obeyed or escaped. The API is
   `GET /api/v1/investigations/capabilities` + `POST /api/v1/investigations/run`, owner-scoped,
-  rate-limited per authenticated user and protected against duplicate clicks (`409`). Backend
-  tests 295 passing; frontend unit tests 65 passing; Part 8 adds no frontend module (the live
-  investigation UX is Part 9). **The one controlled real inference has not run yet** because
-  `Backend/.env` does not exist on this machine — nothing about the real model has been claimed.
+  rate-limited per authenticated user and protected against duplicate clicks (`409`).
+  **The one controlled real inference has not run yet** because `Backend/.env` does not exist
+  on this machine — nothing about the real model has been claimed.
+- **Part 9** (autonomous analysis + safeguard/re-verify UX) complete — the end-user workflow is
+  closed end to end over **recorded reality**: one analysis is one bounded run over an owned
+  plant, each event row is written by the code that did the work (real elapsed time, no fake
+  timers), and the stored document is assembled only from Part 4/5/7 outputs with the Part 8
+  explanation stored separately (SIMULATION EVIDENCE vs AI EXPLANATION). Backend: `app/analyses`
+  (constants/events/interpret/runner/service/pipeline/summary/pdf) and nine
+  `/api/v1/analyses/*` endpoints — every id through ownership (cross-user IDOR test across
+  analysis, failure, scenario, history, report and reverify ⇒ 404), rate-limited per user,
+  duplicate runs answered 409, goal sanitized before storage, reverify mitigations allowlisted
+  and bounded, verdicts drawn only from the fixed sentence
+  "No unsafe condition was detected within the tested simulation scenarios.". Frontend:
+  `/analysis/new` (goal → interpreted change → FIND HIDDEN RISKS), `/analysis/:id/live`
+  (cursor-polled real events + step navigator), failure detail (trajectories, configured
+  limits, first violation, peaks, safeguard events), investigation (counterfactuals),
+  safeguards (trigger/response/violation in required language), reverify (mitigation form →
+  before/after), `/history` (paginated) and `/reports/:id` (Overview/Scenarios/Failures/
+  Counterfactuals/Safeguards/Evidence tabs + multi-page PDF download; the one-viewport rule
+  applies to the interactive screens, the PDF is an export). Backend tests 326 passing
+  (31 new); frontend unit tests 65 passing; build/lint/typecheck green.
 
 ### Next action
 
-Create `Backend/.env` with non-empty `NEBIUS_API_KEY`, `NEBIUS_BASE_URL` and `NEBIUS_MODEL`
-(the key stays out of chat and out of Git), then finish Part 8 with the operator probe
-(`Backend/scripts/nebius_probe.py`): `models` resolves the exact account-eligible Nemotron
-model id from the live catalogue, `check` proves the triple with one tiny completion, and
-`investigate` runs **one** controlled investigation and must show a real model decision, a real
-tool call and real deterministic evidence. That closes Part 8; Part 9 then owns the live
-investigation / reverify / report UX.
+Part 10 — final hardening, deployment and audit (the ten-part plan's last build step), plus
+the one controlled real Nebius inference when `Backend/.env` carries `NEBIUS_API_KEY`,
+`NEBIUS_BASE_URL` and `NEBIUS_MODEL` (the key stays out of chat and out of Git). Submission /
+video work begins only after Part 10 passes.

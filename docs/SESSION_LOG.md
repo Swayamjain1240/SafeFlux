@@ -4,7 +4,64 @@
 
 ---
 
-# Current Checkpoint — 2026-10-06 · PART 8 IMPLEMENTED, REAL INFERENCE PENDING KEY
+# Current Checkpoint — 2026-10-07 · PART 9 IMPLEMENTED, END-TO-END WORKFLOW COMPLETE
+
+**Status:** 🟢 Part 9 (autonomous analysis, safeguard and re-verification UX) implemented and
+test-verified: backend 326 tests passing (31 new), frontend builds with lint/typecheck green
+and 65 unit tests passing. The Part 8 real Nebius inference remains pending `NEBIUS_API_KEY`
+— nothing about the real model has been claimed.
+**Project:** SafeFlux — Autonomous Process-Safety Failure Hunter
+**Track:** Best Apps & Agents
+
+## What is complete (Part 9)
+
+### The rule that shaped everything
+
+One analysis is one bounded, autonomous run over an owned plant, and every page reads that
+run's **recorded reality**. Each event row is written by the code that actually did the work,
+with the real elapsed time; nothing is replayed from timers and no event exists that no code
+produced. The UI never pretends the agent is active.
+
+### Backend (7 commits)
+
+- `app/analyses/` — constants (kinds, statuses incl. honest `interrupted`, 12 event kinds,
+  storage bounds, fixed verdict language), `events.py` (EventRecorder with injected clock),
+  `interpret.py` (deterministic goal → interpreted change), `runner.py` (the real pipeline:
+  understand → map → plan → run → observe → refine → find violations → counterfactuals →
+  safeguard check → optional AI summary), `service.py` (transaction + duplicate 409 + failure
+  marking), `pipeline.py` (failure-detail / reverify / report builders), `summary.py`
+  (optional narration stored separately from evidence), `pdf.py` (dependency-free, escaped).
+- `app/api/routes/analyses.py` — the 9 endpoints; every id through `get_owned_or_404`;
+  rate-limited per user; goal sanitized before storage; mitigation allowlist with bounds.
+- Tests: 16 unit + 15 endpoint (full workflow with the real simulator, no-failure language,
+  events cursor, 409 duplicate, per-user rate limit, sanitization, mitigation bounds, IDOR
+  across analysis/failure/scenario/history/report/reverify, history scoping).
+
+### Frontend
+
+`/analysis/new` (goal → interpreted change → FIND HIDDEN RISKS, duplicate-safe),
+`/analysis/:id/live` (cursor-polled real events + step navigator), failure detail
+(trajectories, limits, first violation, peaks, safeguard events), investigation
+(SIMULATION EVIDENCE vs AI EXPLANATION), safeguards (trigger/response/violation in the
+required language), reverify (mitigation form → before/after), `/history` (paginated),
+`/reports/:id` (six tabs + PDF download). Build, lint, typecheck green.
+
+### Bugs the tests caught (and the fixes)
+
+- EventRecorder used the wall clock instead of the injected clock (deterministic tests).
+- The analysis service never committed — the run and its events would have been lost.
+- The runner's lazy evaluator builder was never invoked.
+- `make_case` required enum keys; three call sites passed raw strings.
+- The failure page re-simulates from the plant's *current* configured limits (live source of
+  truth), not a stored copy.
+
+### Remaining
+
+Part 10 (hardening/deployment/audit) and the one controlled real Nebius inference.
+
+---
+
+# Previous Checkpoint — 2026-10-06 · PART 8 IMPLEMENTED, REAL INFERENCE PENDING KEY
 
 **Status:** 🟡 Part 8 (hybrid Nebius/Nemotron investigation agent) implemented, documented and
 verified against a scripted provider — the one controlled **real** inference has not run
