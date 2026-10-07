@@ -68,8 +68,17 @@ def test_secret_never_appears_in_repr():
 
 
 def test_get_settings_fails_with_field_names_only(monkeypatch):
-    """Startup with missing config must name fields, never echo values."""
+    """Startup with missing config must name fields, never echo values.
+
+    Isolated from any developer-local Backend/.env: pydantic-settings would
+    otherwise keep supplying JWT_SECRET from that file after the process
+    environment is cleared, which would mask the missing-variable path this
+    test exists to verify.
+    """
     monkeypatch.delenv("JWT_SECRET", raising=False)
+    monkeypatch.setattr(
+        Settings, "model_config", {**Settings.model_config, "env_file": None}
+    )
     get_settings.cache_clear()
 
     with pytest.raises(SystemExit) as exc_info:
