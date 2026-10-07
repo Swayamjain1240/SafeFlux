@@ -1,8 +1,8 @@
+import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import AppLayout from '../layouts/AppLayout'
 import PublicLayout from '../layouts/PublicLayout'
 import AnalysisNewPage from '../pages/AnalysisNewPage'
-import ComingSoon from '../pages/ComingSoon'
 import DashboardPage from '../pages/DashboardPage'
 import LandingPage from '../pages/LandingPage'
 import LoginPage from '../pages/LoginPage'
@@ -11,6 +11,17 @@ import NotFoundPage from '../pages/NotFoundPage'
 import PlantSetupPage from '../pages/PlantSetupPage'
 import SignupPage from '../pages/SignupPage'
 import ProtectedRoute from './ProtectedRoute'
+import { LoadingFallback } from '../components/LoadingFallback'
+
+// Part 9 investigation views are route-level lazy: the dashboard/monitor bundle
+// stays small, and these load only when the engineer opens one of them.
+const AnalysisLivePage = lazy(() => import('../pages/AnalysisLivePage'))
+const FailureDetailPage = lazy(() => import('../pages/FailureDetailPage'))
+const InvestigationPage = lazy(() => import('../pages/InvestigationPage'))
+const SafeguardsPage = lazy(() => import('../pages/SafeguardsPage'))
+const ReverifyPage = lazy(() => import('../pages/ReverifyPage'))
+const HistoryPage = lazy(() => import('../pages/HistoryPage'))
+const ReportPage = lazy(() => import('../pages/ReportPage'))
 
 /** Route table mirrors docs/ARCHITECTURE.md §4 (public vs protected). */
 export default function AppRoutes() {
@@ -31,26 +42,60 @@ export default function AppRoutes() {
           <Route path="/analysis/new" element={<AnalysisNewPage />} />
           <Route
             path="/analysis/:id/live"
-            element={<ComingSoon title="Live autonomous investigation" part={8} />}
+            element={
+              <Suspense fallback={<LoadingFallback label="Loading live investigation…" />}>
+                <AnalysisLivePage />
+              </Suspense>
+            }
           />
           <Route
             path="/analysis/:id/failures/:failureId"
-            element={<ComingSoon title="Failure detail" part={7} />}
+            element={
+              <Suspense fallback={<LoadingFallback label="Loading failure evidence…" />}>
+                <FailureDetailPage />
+              </Suspense>
+            }
           />
           <Route
             path="/analysis/:id/investigation"
-            element={<ComingSoon title="Root-cause investigation" part={9} />}
+            element={
+              <Suspense fallback={<LoadingFallback label="Loading investigation…" />}>
+                <InvestigationPage />
+              </Suspense>
+            }
           />
           <Route
             path="/analysis/:id/safeguards"
-            element={<ComingSoon title="Safeguard verification" part={9} />}
+            element={
+              <Suspense fallback={<LoadingFallback label="Loading safeguard verification…" />}>
+                <SafeguardsPage />
+              </Suspense>
+            }
           />
           <Route
             path="/analysis/:id/reverify"
-            element={<ComingSoon title="Re-verification" part={9} />}
+            element={
+              <Suspense fallback={<LoadingFallback label="Loading re-verification…" />}>
+                <ReverifyPage />
+              </Suspense>
+            }
           />
-          <Route path="/history" element={<ComingSoon title="Analysis history" part={6} />} />
-          <Route path="/reports/:id" element={<ComingSoon title="Engineering report" part={9} />} />
+          <Route
+            path="/history"
+            element={
+              <Suspense fallback={<LoadingFallback label="Loading history…" />}>
+                <HistoryPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/reports/:id"
+            element={
+              <Suspense fallback={<LoadingFallback label="Loading report…" />}>
+                <ReportPage />
+              </Suspense>
+            }
+          />
         </Route>
       </Route>
     </Routes>

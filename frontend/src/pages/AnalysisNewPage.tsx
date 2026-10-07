@@ -1,178 +1,242 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ErrorPanel } from '../components/ErrorPanel'
+import { ApiError } from '../api/client'
 import { StatePanel } from '../components/ui/StatePanel'
-import { TabBar } from '../components/ui/TabBar'
+import { TabBar, type TabItem } from '../components/ui/TabBar'
 import { usePlantList } from '../hooks/usePlants'
-import { useRunSearch, useSearchCapabilities } from '../hooks/useSearches'
-import { useViewport } from '../layout/useViewport'
-import { usesWideLayout } from '../layout/viewport'
-import {
-  availablePresets,
-  buildSearchRequest,
-  defaultDraft,
-  draftIssues,
-  type SearchDraft,
-  type SearchPreset,
-} from '../search/plan'
-import { SearchControls } from '../search/SearchControls'
-import { SearchResults } from '../search/SearchResults'
-
-type Pane = 'controls' | 'results'
+import { useRunAnalysis } from '../hooks/useAnalyses'
+import { EVENT_LABELS, type EventKind, type InterpretedChange } from '../types/analysis'
 
 /**
- * New analysis — the deterministic scenario search workspace (Part 7).
+ * New autonomous analysis (Part 9) — the end-user workflow entry.
  *
- * One viewport: the plan editor and the result viewer are two panes that share
- * the screen on a wide layout and switch via tabs on a tablet/mobile one. The
- * engineer chooses a variable and a resolution; the search itself decides which
- * values matter, the simulator produces the trajectories, and the safety engine
- * produces the verdicts. No AI is involved anywhere in this page.
+ * The engineer describes the change, reviews the *interpreted change* (read
+ * mechanically by the backend from the sanitized text), then FIND HIDDEN
+ * RISKS starts one real bounded run. A duplicate click while a run is in
+ * flight is disabled locally and answered 409 by the server regardless; the
+ * run is synchronous, so the workspace navigates to the live page where the
+ * actual events appear as they happened.
  */
+
+type Pane = 'describe' | 'plan'
+
+const SUGGESTION = 'Increase production throughput by 30%.'
+
+const TABS: readonly TabItem<Pane>[] = [
+  { id: 'describe', label: 'Describe the change' },
+  { id: 'plan', label: 'What will be tested' },
+]
+
+function describeInterpretation(interpretation: InterpretedChange | null): string[] {
+  if (!interpretation) return []
+  const lines: string[] = []
+  if (interpretation.direction === 'increase') lines.push('Direction read: increase.')
+  else if (interpretation.direction === 'decrease') lines.push('Direction read: decrease.')
+  else if (interpretation.direction === 'conflicting')
+    lines.push('Direction words conflict; the text will be treated as data only.')
+  if (interpretation.magnitude)
+    lines.push(`Magnitude read: ${interpretation.magnitude}${interpretation.is_percent ? ' (percent)' : ''}.`)
+  if (interpretation.variables.length > 0)
+    lines.push(`Affected allowlisted variables: ${interpretation.variables.join(', ')}.`)
+  for (const gap of interpretation.unrecognised) lines.push(`Note: ${gap}.`)
+  if (lines.length === 0) lines.push('No direction or equipment noun was recognised; a default bounded search will run.')
+  return lines
+}
+
 export default function AnalysisNewPage() {
-  const { viewport } = useViewport()
-  const wide = usesWideLayout(viewport)
   const navigate = useNavigate()
   const plantsQuery = usePlantList()
-  const capabilitiesQuery = useSearchCapabilities()
-  const run = useRunSearch()
+  const run = useRunAnalysis()
+  const [pane, setPane] = useState<Pane>('describe')
+  const [goal, setGoal] = useState('')
+  const [error, setError] = useState<string | null>(null)
 
-  const [draft, setDraft] = useState<SearchDraft>(() => defaultDraft())
-  const [presetId, setPresetId] = useState('cooling_degradation')
-  const [pane, setPane] = useState<Pane>('controls')
-
-  const capabilities = capabilitiesQuery.data ?? null
   const plants = useMemo(
     () => (plantsQuery.data?.plants ?? []).map((plant) => ({ id: plant.id, name: plant.name })),
     [plantsQuery.data],
   )
-  const presets = useMemo(
-    () => availablePresets((capabilities?.variables ?? []).map((spec) => spec.variable)),
-    [capabilities],
-  )
+  const plantId = plants[0]?.id ?? null
 
-  // The first plant is the default so a single-plant workspace needs no extra click.
-  const plantId = draft.plantId ?? plants[0]?.id ?? null
-  const effective: SearchDraft = { ...draft, plantId }
-  const issues = capabilities ? draftIssues(effective, capabilities.limits) : []
-  const canRun = Boolean(capabilities) && issues.length === 0 && !run.isPending
+  const trimmed = goal.trim()
+  const tooLong = goal.length > 2000
+  const canRun = Boolean(plantId) && trimmed.length > 0 && !tooLong && !run.isPending
 
-  function applyPreset(preset: SearchPreset) {
-    setPresetId(preset.id)
-    setDraft((current) => ({
-      ...defaultDraft(preset),
-      plantId: current.plantId,
-      durationS: current.durationS,
-      timeStepS: current.timeStepS,
-      label: preset.id,
-    }))
-  }
-
-  function submit() {
-    if (!canRun) return
-    // One click, one search: the mutation's pending state disables the button,
-    // so a double click cannot start a second run.
-    run.mutate(buildSearchRequest(effective), {
-      onSuccess: () => {
-        if (!wide) setPane('results')
+  function handleSubmit() {
+    if (!canRun || !plantId) return
+    setError(null)
+    run.mutate(
+      { plant_id: plantId, goal: trimmed },
+      {
+        onSuccess: (analysis) => {
+          void navigate(`/analysis/${analysis.id}/live`)
+        },
+        onError: (err) => {
+          if (err instanceof ApiError) setError(err.message)
+          else setError('The analysis could not be started. Please try again.')
+        },
       },
-    })
+    )
   }
 
-  let body
-  if (capabilitiesQuery.isPending || plantsQuery.isPending) {
-    body = <StatePanel tone="neutral" title="Loading search capabilities…" />
-  } else if (capabilitiesQuery.isError) {
-    body = (
-      <div className="p-2">
-        <ErrorPanel error={capabilitiesQuery.error} title="Search is unavailable" />
-      </div>
-    )
-  } else if (plants.length === 0) {
-    body = (
+  if (plantsQuery.isLoading) {
+    return <StatePanel title="Loading plants…" hint="The workspace needs one of your plants." />
+  }
+  if (plants.length === 0) {
+    return (
       <StatePanel
-        tone="neutral"
-        title="No plant to search"
-        hint="A search runs real scenarios on a configured plant."
-        action={{ label: 'Configure a plant', onAct: () => navigate('/plant') }}
+        tone="warn"
+        title="No plant configured yet"
+        hint="An analysis runs over one of your configured plants."
+        action={{ label: 'Set up a plant', onAct: () => void navigate('/plant') }}
       />
     )
-  } else if (capabilities) {
-    const controls = (
-      <SearchControls
-        capabilities={capabilities}
-        plants={plants}
-        presets={presets}
-        presetId={presetId}
-        draft={effective}
-        issues={issues}
-        running={run.isPending}
-        onPreset={applyPreset}
-        onDraft={(patch) => setDraft((current) => ({ ...current, ...patch }))}
-        onRun={submit}
+  }
+  if (plantsQuery.isError) {
+    return (
+      <StatePanel
+        tone="crit"
+        title="Plants could not be loaded"
+        hint="Check that the backend is reachable, then retry."
+        action={{ label: 'Retry', onAct: () => void plantsQuery.refetch() }}
       />
-    )
-    // Remount per result so the viewer's tab/page/filter state starts fresh.
-    const results = (
-      <SearchResults
-        key={run.data ? `result-${run.submittedAt}` : 'no-result'}
-        result={run.data ?? null}
-        running={run.isPending}
-        error={run.error}
-      />
-    )
-
-    body = wide ? (
-      <div className="flex min-h-0 flex-1 gap-3">
-        <div className="flex min-h-0 w-80 shrink-0 flex-col rounded-xl border border-slate-800 bg-slate-900/40 p-3">
-          {controls}
-        </div>
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col rounded-xl border border-slate-800 bg-slate-900/40 p-3">
-          {results}
-        </div>
-      </div>
-    ) : (
-      <div className="flex min-h-0 flex-1 flex-col gap-2">
-        <TabBar
-          tabs={[
-            { id: 'controls' as Pane, label: 'Plan' },
-            { id: 'results' as Pane, label: 'Results' },
-          ]}
-          active={pane}
-          onChange={setPane}
-          label="Analysis panes"
-        />
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col rounded-xl border border-slate-800 bg-slate-900/40 p-3">
-          {pane === 'controls' ? controls : results}
-        </div>
-      </div>
     )
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      <div className="flex shrink-0 flex-wrap items-end justify-between gap-2">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-100">New analysis</h1>
-          <p className="text-xs text-slate-400">
-            Search → Simulator → Safety engine → Evidence. The search chooses the values; the engineer decides what
-            they mean.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-300">
-            Deterministic · no AI
-          </span>
-          <Link
-            to="/monitor"
-            className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800"
-          >
-            Live monitor
-          </Link>
-        </div>
-      </div>
+      <header className="shrink-0">
+        <h1 className="text-lg font-semibold text-slate-100">New autonomous analysis</h1>
+        <p className="text-xs text-slate-400">
+          Plant: <span className="text-slate-200">{plants[0]?.name}</span> · SafeFlux explores
+          simulated scenarios only; it never actuates real equipment.
+        </p>
+      </header>
 
-      {body}
+      <TabBar tabs={TABS} active={pane} onChange={setPane} label="Analysis sections" />
+
+      <section className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+        {pane === 'describe' ? (
+          <div className="flex min-h-0 flex-col gap-4">
+            <label htmlFor="analysis-goal" className="text-sm font-medium text-slate-200">
+              Proposed engineering change
+            </label>
+            <textarea
+              id="analysis-goal"
+              value={goal}
+              maxLength={2000}
+              rows={3}
+              placeholder={SUGGESTION}
+              onChange={(event) => setGoal(event.target.value)}
+              className="w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-cyan-500/60 focus:outline-none"
+            />
+            <div className="flex items-center justify-between text-xs text-slate-500">
+              <button
+                type="button"
+                onClick={() => setGoal(SUGGESTION)}
+                className="rounded border border-slate-700 px-2 py-1 text-slate-300 transition hover:bg-slate-800"
+              >
+                Use example
+              </button>
+              <span>{goal.length}/2000</span>
+            </div>
+            {error && (
+              <p role="alert" className="rounded-lg border border-rose-600/50 bg-rose-950/40 px-3 py-2 text-sm text-rose-200">
+                {error}
+              </p>
+            )}
+            <div className="mt-auto flex items-center justify-end gap-3">
+              <Link to="/dashboard" className="text-xs text-slate-400 hover:text-slate-200">
+                Cancel
+              </Link>
+              <button
+                type="button"
+                disabled={!canRun}
+                onClick={handleSubmit}
+                className="rounded-lg bg-cyan-500/20 px-5 py-2 text-sm font-semibold text-cyan-200 ring-1 ring-cyan-500/40 transition enabled:hover:bg-cyan-500/30 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {run.isPending ? 'Running analysis…' : 'FIND HIDDEN RISKS'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <PlanPreview goal={trimmed} />
+        )}
+      </section>
     </div>
   )
+}
+
+/**
+ * What will be tested — the fixed, honest shape of one run. The interpreted
+ * change is derived locally with the same mechanical rules the backend uses,
+ * purely as a preview; the run itself re-reads the sanitized text server-side.
+ */
+function PlanPreview({ goal }: { goal: string }) {
+  const preview = useMemo(() => previewInterpretation(goal), [goal])
+  const stages: EventKind[] = [
+    'understanding_change',
+    'mapping_equipment',
+    'planning',
+    'running_scenario',
+    'observing_result',
+    'refining_boundary',
+    'finding_violation',
+    'running_counterfactual',
+    'checking_safeguard',
+  ]
+  return (
+    <div className="flex min-h-0 flex-col gap-4">
+      <div>
+        <h2 className="text-sm font-semibold text-slate-200">Interpreted change</h2>
+        <ul className="mt-2 space-y-1 text-xs text-slate-400">
+          {describeInterpretation(preview).map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+        <p className="mt-2 text-[11px] text-slate-500">
+          This preview is a local reading of your text. The backend re-reads the sanitized
+          text itself when the run starts; the simulator, not this reading, decides every number.
+        </p>
+      </div>
+      <div>
+        <h2 className="text-sm font-semibold text-slate-200">Stages the run will record</h2>
+        <ol className="mt-2 space-y-1 text-xs text-slate-400">
+          {stages.map((kind, index) => (
+            <li key={kind}>
+              {index + 1}. {EVENT_LABELS[kind]}
+            </li>
+          ))}
+        </ol>
+        <p className="mt-2 text-[11px] text-slate-500">
+          Each stage appears on the live page only when the backend actually finished it,
+          with its real elapsed time. Nothing is animated to look active.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+/** Local mirror of the backend's mechanical reading (direction/magnitude only). */
+function previewInterpretation(text: string): InterpretedChange | null {
+  const value = text.trim()
+  if (!value) return null
+  const lowered = value.toLowerCase()
+  const increaseWords = ['increase', 'raise', 'boost', 'more', 'higher', 'ramp up', 'step up']
+  const decreaseWords = ['decrease', 'reduce', 'less', 'lower', 'cut', 'shut down', 'turn down']
+  const hasIncrease = increaseWords.some((word) => lowered.includes(word))
+  const hasDecrease = decreaseWords.some((word) => lowered.includes(word))
+  const direction = hasIncrease && !hasDecrease ? 'increase' : hasDecrease && !hasIncrease ? 'decrease' : hasIncrease && hasDecrease ? 'conflicting' : null
+  const match = /(\d+(?:\.\d+)?)\s*(%|x)?/.exec(lowered)
+  const magnitudeValue = match ? Number.parseFloat(match[1]) : null
+  const isPercent = Boolean(match?.[2] === '%')
+  const magnitude = magnitudeValue === null ? null : `${match?.[1] ?? ''}${isPercent ? '%' : match?.[2] === 'x' ? 'x' : ''}`
+  return {
+    text: value,
+    direction,
+    magnitude,
+    magnitude_value: magnitudeValue,
+    is_percent: isPercent,
+    variables: [],
+    unrecognised: [],
+  }
 }
