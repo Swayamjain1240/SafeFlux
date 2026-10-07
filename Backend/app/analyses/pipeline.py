@@ -44,9 +44,10 @@ def failure_detail(
     original: dict,
     series: dict[str, list],
     safeguards: list[dict],
+    limits: dict | None = None,
 ) -> dict:
     """One failure's full evidence page, straight from stored/recomputed facts."""
-    limits = ((original.get("plan") or {}).get("safety_limits")) or {}
+    configured_limits = limits or ((original.get("plan") or {}).get("safety_limits")) or {}
     findings = failure.get("findings") or []
     first_violation = None
     for finding in findings:
@@ -62,7 +63,7 @@ def failure_detail(
             "duration_s": (original.get("plan") or {}).get("duration_s"),
             "time_step_s": (original.get("plan") or {}).get("time_step_s"),
         },
-        "configured_limits": limits,
+        "configured_limits": configured_limits,
         "first_violation": first_violation,
         "peaks": failure.get("peaks") or {},
         "status": failure.get("status"),

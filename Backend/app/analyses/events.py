@@ -66,8 +66,10 @@ class EventRecorder:
         self._db = db
         self._analysis_id = analysis_id
         self._seq = 0
-        self._started = time.monotonic()
+        # The injected clock (tests) must also define the run's t0, so elapsed
+        # offsets are measured on one clock only.
         self._monotonic = monotonic or time.monotonic
+        self._started = self._monotonic()
 
     @property
     def count(self) -> int:

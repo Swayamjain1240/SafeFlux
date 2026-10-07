@@ -254,6 +254,11 @@ def get_failure_endpoint(
         original=analysis.result,
         series=bounded_series(result),
         safeguards=timings,
+        limits={
+            "max_temperature_c": profile.safety_limits.max_temperature_c,
+            "max_pressure_bar": profile.safety_limits.max_pressure_bar,
+            "max_level_pct": profile.safety_limits.max_level_pct,
+        },
     )
     return success_response(detail)
 

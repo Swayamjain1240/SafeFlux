@@ -71,6 +71,9 @@ class AnalysisService:
         """
         analysis_id = analysis_id or f"an-{uuid.uuid4().hex[:12]}"
         cleaned = sanitize_untrusted_text(goal or "", limit=2000)
+        # The goal is one engineering sentence: collapse whitespace (including
+        # newlines) so storage and display stay single-line (rule 6).
+        cleaned = " ".join(cleaned.split())
         interpretation = interpret_goal(cleaned)
         recorder = recorder or EventRecorder(db, analysis_id)
         self.last_failed_id: str | None = None
@@ -99,9 +102,18 @@ class AnalysisService:
                 analysis.result = result
                 analysis.counts = self._counts_for(result)
                 mark_complete(analysis)
+                # The run and its events commit together: a stored timeline
+                # always reflects a run that really happened.
+                db.commit()
             except Exception as exc:  # noqa: BLE001 - real failure, real status
                 self.last_failed_id = analysis_id
                 mark_failed(analysis, exc, running_status="failed")
+                # The failure is real too: keep the row and the events recorded
+                # up to the failure, then re-raise for the caller's envelope.
+                try:
+                    db.commit()
+                except Exception:  # noqa: BLE001 - the rollback path owns it then
+                    db.rollback()
                 raise
             return analysis_id
 

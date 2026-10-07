@@ -261,13 +261,15 @@ class AnalysisRunner:
         if pivot is None:
             return []
         values = dict(pivot.get("values") or {})
-        evaluator = self._evaluator
-        assert evaluator is not None
+        evaluator = self.evaluator
         counterfactuals: list[dict] = []
         for variable, value, label in self._candidates(values):
             if len(counterfactuals) >= MAX_COUNTERFACTUALS:
                 break
-            case = make_case({**values, variable: value}, label=label)
+            case = make_case(
+                {**{SearchVariable(k): v for k, v in values.items()}, variable: value},
+                label=label,
+            )
             self._emit("running_counterfactual", payload={**case.as_dict(), "label": label})
             evaluation = evaluator.evaluate(case).to_dict()
             peaks_before = dict(pivot.get("peaks") or {})
@@ -329,10 +331,12 @@ class AnalysisRunner:
 
     def _run_safeguard_check(self, pivot: dict | None) -> dict:
         """Trigger/response/violation timing from a real bounded re-simulation."""
-        evaluator = self._evaluator
-        assert evaluator is not None
+        evaluator = self.evaluator
         if pivot is not None:
-            case = make_case(dict(pivot.get("values") or {}), label="plant under change")
+            case = make_case(
+                {SearchVariable(k): v for k, v in (pivot.get("values") or {}).items()},
+                label="plant under change",
+            )
         else:
             case = make_case({}, label="plant as configured")
         self._emit("checking_safeguard", payload={"case_key": case.key()})
@@ -411,6 +415,11 @@ class AnalysisRunner:
                 budget=SearchBudget(limits=resolve_limits(self._settings)),
             )
         return self._evaluator
+
+    @property
+    def evaluator(self):
+        """The lazily-built shared evaluator (never None)."""
+        return self._evaluator_for()
 
     def _scenario_plan(self, label: str):
         from app.search.spec import ScenarioPlan
