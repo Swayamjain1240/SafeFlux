@@ -167,6 +167,17 @@ $RECYCLE.BIN/
 .turbo/
 
 # -------------------------
+# Deployment platform outputs (Part 10)
+# -------------------------
+.wrangler/
+.vercel/
+.netlify/
+.output/
+# Cloudflare-style local secret file — never committed
+.dev.vars
+.dev.vars.*
+
+# -------------------------
 # Security scanner output
 # -------------------------
 .gitleaks-report*

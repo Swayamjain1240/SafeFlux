@@ -12,6 +12,13 @@ dist
 dist-ssr
 *.local
 
+# Environment — only the .env.example template is committed.
+# VITE_* values are baked into the browser bundle, so they are public by
+# design: never put a secret here.
+.env
+.env.*
+!.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

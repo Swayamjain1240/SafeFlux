@@ -158,6 +158,15 @@ npm test
 
 ## Environment variables
 
+### Repository root (`.env.example`)
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `SAFEFLUX_BACKEND_PORT` | no (8000) | port `npm run dev` binds the API to — namespaced so a host's generic `PORT` cannot redirect the API |
+
+The root template is deployment documentation (it carries the production checklist);
+the running services read `Backend/.env` and `frontend/.env` only.
+
 ### Backend (`Backend/.env.example`)
 
 | Variable | Required | Purpose |
