@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import { StatePanel } from '../components/ui/StatePanel'
+import { Panel } from '../components/ui/Panel'
 import { TabBar, type TabItem } from '../components/ui/TabBar'
+import { IconAnalyze } from '../components/ui/Icons'
 import { usePlantList } from '../hooks/usePlants'
 import { useRunAnalysis } from '../hooks/useAnalyses'
 import { EVENT_LABELS, type EventKind, type InterpretedChange } from '../types/analysis'
@@ -16,6 +18,9 @@ import { EVENT_LABELS, type EventKind, type InterpretedChange } from '../types/a
  * flight is disabled locally and answered 409 by the server regardless; the
  * run is synchronous, so the workspace navigates to the live page where the
  * actual events appear as they happened.
+ *
+ * Visual transformation: the question leads ("What changed?"), the input reads
+ * as one instrument, and the button is the single accent element on the screen.
  */
 
 type Pane = 'describe' | 'plan'
@@ -41,6 +46,26 @@ function describeInterpretation(interpretation: InterpretedChange | null): strin
   for (const gap of interpretation.unrecognised) lines.push(`Note: ${gap}.`)
   if (lines.length === 0) lines.push('No direction or equipment noun was recognised; a default bounded search will run.')
   return lines
+}
+
+/**
+ * Search-space motif: one row of candidate scenarios with a single amber bar
+ * marking where the boundary search concentrates. Decorative, no motion, no
+ * numbers — the run itself decides every value.
+ */
+function SearchSpaceMotif() {
+  const heights = [6, 9, 13, 18, 24, 30, 36, 40, 34, 27, 21, 16, 11, 8, 6, 4]
+  return (
+    <div className="panel-inset flex shrink-0 items-end gap-1 px-3 py-1.5" aria-hidden="true">
+      {heights.map((height, index) => (
+        <span
+          key={`${height}-${index}`}
+          className={`w-full rounded-sm ${index === 7 ? 'bg-amber-400/80' : 'bg-accent/25'}`}
+          style={{ height }}
+        />
+      ))}
+    </div>
+  )
 }
 
 export default function AnalysisNewPage() {
@@ -104,19 +129,37 @@ export default function AnalysisNewPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      <header className="shrink-0">
-        <h1 className="text-lg font-semibold text-slate-100">New autonomous analysis</h1>
-        <p className="text-xs text-slate-400">
-          Plant: <span className="text-slate-200">{plants[0]?.name}</span> · SafeFlux explores
-          simulated scenarios only; it never actuates real equipment.
-        </p>
+      <header className="flex shrink-0 flex-wrap items-end justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold tracking-[0.22em] text-accent/80 uppercase">
+            Autonomous analysis
+          </p>
+          <h1 className="text-base font-semibold tracking-tight text-white sm:text-lg">
+            What changed?
+          </h1>
+          <p className="truncate text-xs text-slate-500">
+            Plant: <span className="text-slate-300">{plants[0]?.name}</span> · SafeFlux explores
+            simulated scenarios only; it never actuates real equipment.
+          </p>
+        </div>
       </header>
+
+      <SearchSpaceMotif />
 
       <TabBar tabs={TABS} active={pane} onChange={setPane} label="Analysis sections" />
 
-      <section className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+      <Panel
+        className="min-h-0 flex-1"
+        bodyClassName="flex min-h-0 flex-col p-4"
+        title={pane === 'describe' ? 'Engineering change' : 'Planned investigation'}
+        hint={
+          pane === 'describe'
+            ? 'describe it the way you would to a colleague'
+            : 'fixed, honest shape of one run'
+        }
+      >
         {pane === 'describe' ? (
-          <div className="flex min-h-0 flex-col gap-4">
+          <div className="flex min-h-0 flex-1 flex-col gap-4">
             <label htmlFor="analysis-goal" className="text-sm font-medium text-slate-200">
               Proposed engineering change
             </label>
@@ -124,23 +167,23 @@ export default function AnalysisNewPage() {
               id="analysis-goal"
               value={goal}
               maxLength={2000}
-              rows={3}
+              rows={5}
               placeholder={SUGGESTION}
               onChange={(event) => setGoal(event.target.value)}
-              className="w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-cyan-500/60 focus:outline-none"
+              className="min-h-24 w-full flex-1 resize-none rounded-md border border-edge-strong bg-void/70 px-3 py-2.5 text-sm leading-relaxed text-slate-100 placeholder:text-slate-600 focus:border-accent/60 focus:outline-none"
             />
             <div className="flex items-center justify-between text-xs text-slate-500">
               <button
                 type="button"
                 onClick={() => setGoal(SUGGESTION)}
-                className="rounded border border-slate-700 px-2 py-1 text-slate-300 transition hover:bg-slate-800"
+                className="rounded border border-edge-strong px-2 py-1 text-slate-300 transition hover:border-accent/40 hover:text-slate-100"
               >
                 Use example
               </button>
-              <span>{goal.length}/2000</span>
+              <span className="stat-num">{goal.length}/2000</span>
             </div>
             {error && (
-              <p role="alert" className="rounded-lg border border-rose-600/50 bg-rose-950/40 px-3 py-2 text-sm text-rose-200">
+              <p role="alert" className="rounded-md border border-rose-600/50 bg-rose-950/40 px-3 py-2 text-sm text-rose-200">
                 {error}
               </p>
             )}
@@ -152,8 +195,9 @@ export default function AnalysisNewPage() {
                 type="button"
                 disabled={!canRun}
                 onClick={handleSubmit}
-                className="rounded-lg bg-cyan-500/20 px-5 py-2 text-sm font-semibold text-cyan-200 ring-1 ring-cyan-500/40 transition enabled:hover:bg-cyan-500/30 disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex items-center gap-2 rounded-md bg-accent px-5 py-2 text-sm font-semibold tracking-wide text-void transition enabled:hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-40"
               >
+                <IconAnalyze className="h-4 w-4" />
                 {run.isPending ? 'Running analysis…' : 'FIND HIDDEN RISKS'}
               </button>
             </div>
@@ -161,7 +205,7 @@ export default function AnalysisNewPage() {
         ) : (
           <PlanPreview goal={trimmed} />
         )}
-      </section>
+      </Panel>
     </div>
   )
 }
@@ -185,7 +229,7 @@ function PlanPreview({ goal }: { goal: string }) {
     'checking_safeguard',
   ]
   return (
-    <div className="flex min-h-0 flex-col gap-4">
+    <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
       <div>
         <h2 className="text-sm font-semibold text-slate-200">Interpreted change</h2>
         <ul className="mt-2 space-y-1 text-xs text-slate-400">
@@ -200,10 +244,13 @@ function PlanPreview({ goal }: { goal: string }) {
       </div>
       <div>
         <h2 className="text-sm font-semibold text-slate-200">Stages the run will record</h2>
-        <ol className="mt-2 space-y-1 text-xs text-slate-400">
+        <ol className="mt-2 space-y-1">
           {stages.map((kind, index) => (
-            <li key={kind}>
-              {index + 1}. {EVENT_LABELS[kind]}
+            <li key={kind} className="panel-inset flex items-center gap-2 px-2.5 py-1.5 text-xs text-slate-300">
+              <span className="stat-num text-[10px] text-slate-500">
+                {String(index + 1).padStart(2, '0')}
+              </span>
+              {EVENT_LABELS[kind]}
             </li>
           ))}
         </ol>
