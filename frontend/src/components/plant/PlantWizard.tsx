@@ -117,13 +117,13 @@ function NumberField({ id, label, unit, value, onChange, error }: NumberFieldPro
         aria-describedby={error ? `${id}-error` : undefined}
         onChange={(event) => onChange(event.target.value)}
         className={[
-          'w-full rounded-lg border bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition',
-          'focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/30',
-          error ? 'border-rose-500' : 'border-slate-700',
+          'stat-num w-full rounded-md border bg-void/60 px-3 py-2 text-sm text-slate-100 outline-none transition',
+          'focus:border-accent focus:ring-2 focus:ring-accent/25',
+          error ? 'border-crit/70' : 'border-edge-strong',
         ].join(' ')}
       />
       {error && (
-        <p id={`${id}-error`} className="mt-1 text-xs text-rose-400">
+        <p id={`${id}-error`} className="mt-1 text-xs text-crit">
           {error}
         </p>
       )}
@@ -147,7 +147,7 @@ function ToggleField({
   return (
     <label
       htmlFor={id}
-      className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2"
+      className="flex cursor-pointer items-start gap-3 rounded-md border border-edge/80 bg-void/50 px-3 py-2 transition hover:border-edge-strong"
     >
       <input
         id={id}
@@ -155,7 +155,7 @@ function ToggleField({
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
-        className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-900 accent-cyan-500"
+        className="mt-0.5 h-4 w-4 shrink-0 rounded border-edge-strong bg-surface accent-accent"
       />
       <span>
         <span className="block text-xs font-medium text-slate-200">{label}</span>
@@ -169,7 +169,7 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-0.5">
       <span className="text-[11px] text-slate-500">{label}</span>
-      <span className="font-mono text-[11px] text-slate-200">{value}</span>
+      <span className="stat-num text-[11px] text-slate-200">{value}</span>
     </div>
   )
 }
@@ -236,7 +236,7 @@ export function PlantWizard({ onCreated, onCancel }: PlantWizardProps) {
     <form onSubmit={handleSubmit} noValidate className="mx-auto flex w-full max-w-2xl flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-white">New plant configuration</h2>
+          <h2 className="text-base font-semibold text-slate-100">New plant configuration</h2>
           <p className="text-xs text-slate-500">
             Step {step + 1} of {STEP_LABELS.length} · {STEP_LABELS[step]}
           </p>
@@ -244,7 +244,7 @@ export function PlantWizard({ onCreated, onCancel }: PlantWizardProps) {
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800"
+          className="rounded-md border border-edge-strong px-3 py-1.5 text-xs text-slate-300 transition hover:bg-surface-2"
         >
           Cancel
         </button>
@@ -254,17 +254,17 @@ export function PlantWizard({ onCreated, onCancel }: PlantWizardProps) {
         {STEP_LABELS.map((label, index) => (
           <div
             key={label}
-            className={`h-1 flex-1 rounded-full ${index <= step ? 'bg-cyan-400' : 'bg-slate-700'}`}
+            className={`h-1 flex-1 rounded-full ${index <= step ? 'bg-accent' : 'bg-edge-strong'}`}
           />
         ))}
       </div>
 
-      <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3 sm:p-4">
+      <div className="rounded-md border border-edge/80 bg-panel/60 p-3 sm:p-4">
         {step === 0 && (
           <div className="space-y-3">
             <div>
               <label htmlFor="name" className="mb-1 block text-xs font-medium text-slate-400">
-                Plant name<span className="text-cyan-400"> *</span>
+                Plant name<span className="text-accent"> *</span>
               </label>
               <input
                 id="name"
@@ -276,13 +276,13 @@ export function PlantWizard({ onCreated, onCancel }: PlantWizardProps) {
                 onChange={(event) => patch('name', event.target.value)}
                 placeholder="Reactor R-101 pilot plant"
                 className={[
-                  'w-full rounded-lg border bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition',
-                  'placeholder:text-slate-600 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/30',
-                  errors.name ? 'border-rose-500' : 'border-slate-700',
+                  'w-full rounded-md border bg-void/60 px-3 py-2 text-sm text-slate-100 outline-none transition',
+                  'placeholder:text-slate-600 focus:border-accent focus:ring-2 focus:ring-accent/25',
+                  errors.name ? 'border-crit/70' : 'border-edge-strong',
                 ].join(' ')}
               />
               {errors.name && (
-                <p id="name-error" className="mt-1 text-xs text-rose-400">
+                <p id="name-error" className="mt-1 text-xs text-crit">
                   {errors.name}
                 </p>
               )}
@@ -298,7 +298,7 @@ export function PlantWizard({ onCreated, onCancel }: PlantWizardProps) {
                 maxLength={120}
                 onChange={(event) => patch('location', event.target.value)}
                 placeholder="Unit 4 · Process Hall A"
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/30"
+                className="w-full rounded-md border border-edge-strong bg-void/60 px-3 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-accent focus:ring-2 focus:ring-accent/25"
               />
             </div>
             <div>
@@ -316,7 +316,7 @@ export function PlantWizard({ onCreated, onCancel }: PlantWizardProps) {
                 rows={3}
                 onChange={(event) => patch('description', event.target.value)}
                 placeholder="What this plant models and any notes for the analysis."
-                className="w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/30"
+                className="w-full resize-none rounded-md border border-edge-strong bg-void/60 px-3 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-accent focus:ring-2 focus:ring-accent/25"
               />
             </div>
           </div>
@@ -534,7 +534,7 @@ export function PlantWizard({ onCreated, onCancel }: PlantWizardProps) {
 
       {submitError !== null && <ErrorPanel error={submitError} title="Could not save plant" />}
       {step === LAST_STEP && Object.keys(errors).length > 0 && (
-        <p className="text-xs text-rose-400">
+        <p className="text-xs text-crit">
           Some earlier steps need attention. Use Back to fix them.
         </p>
       )}
@@ -543,7 +543,7 @@ export function PlantWizard({ onCreated, onCancel }: PlantWizardProps) {
         <button
           type="button"
           onClick={step === 0 ? onCancel : handleBack}
-          className="flex-1 rounded-lg border border-slate-700 px-4 py-2.5 text-sm text-slate-300 transition hover:bg-slate-800"
+          className="flex-1 rounded-md border border-edge-strong px-4 py-2.5 text-sm text-slate-300 transition hover:bg-surface-2"
         >
           {step === 0 ? 'Cancel' : 'Back'}
         </button>
@@ -551,7 +551,7 @@ export function PlantWizard({ onCreated, onCancel }: PlantWizardProps) {
           <button
             type="button"
             onClick={handleNext}
-            className="flex-1 rounded-lg bg-cyan-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
+            className="flex-1 rounded-md bg-accent px-4 py-2.5 text-sm font-semibold text-void transition hover:bg-accent-soft"
           >
             Next
           </button>
@@ -559,7 +559,7 @@ export function PlantWizard({ onCreated, onCancel }: PlantWizardProps) {
           <button
             type="submit"
             disabled={submitting}
-            className="flex-1 rounded-lg bg-cyan-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1 rounded-md bg-accent px-4 py-2.5 text-sm font-semibold text-void transition hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? 'Saving…' : 'Save plant'}
           </button>

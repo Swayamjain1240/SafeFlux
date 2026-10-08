@@ -68,7 +68,18 @@
     border-radius: 4px;
   }
 
-  /* Thin industrial scrollbars — inner panels may scroll; the page never does. */
+  /* One slow signal sweep used inside the decorative auth panel. Motion only;
+   it carries no state, and reduced-motion collapses it with everything else. */
+@keyframes sf-sweep {
+  from {
+    stroke-dashoffset: 234;
+  }
+  to {
+    stroke-dashoffset: -14;
+  }
+}
+
+/* Thin industrial scrollbars — inner panels may scroll; the page never does. */
   * {
     scrollbar-width: thin;
     scrollbar-color: #24313f transparent;
