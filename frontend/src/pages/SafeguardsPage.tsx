@@ -1,7 +1,7 @@
-import { useMemo } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { StatePanel } from '../components/ui/StatePanel'
 import { useResultDocument } from '../hooks/useAnalyses'
+import { safeguardsView } from '../analysis/safeguardsView'
 import type { SafeguardTiming } from '../types/analysis'
 
 /**
@@ -31,12 +31,8 @@ const TONE_CLASS: Record<'ok' | 'late' | 'idle', string> = {
 
 export default function SafeguardsPage() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const resultQuery = useResultDocument(id)
-
-  const timings = useMemo<SafeguardTiming[]>(
-    () => resultQuery.data?.safeguards?.timings ?? [],
-    [resultQuery.data],
-  )
 
   if (resultQuery.isLoading) return <StatePanel title="Loading safeguard evidence…" />
   if (resultQuery.isError || !resultQuery.data) {
@@ -50,6 +46,27 @@ export default function SafeguardsPage() {
     )
   }
   const result = resultQuery.data
+  const view = safeguardsView(result)
+  if (view.kind === 'no-evidence') {
+    // A re-verification record stores the before/after comparison, not the
+    // safeguard timings — those belong to the parent analysis (BUG-02).
+    const parentId = view.parentId
+    return (
+      <StatePanel
+        title="No safeguard evidence on this record"
+        hint="This record is a re-verification run. Its safeguard timings belong to the parent analysis it compares against."
+        action={
+          parentId
+            ? {
+                label: 'Open parent safeguards',
+                onAct: () => navigate(`/analysis/${parentId}/safeguards`),
+              }
+            : undefined
+        }
+      />
+    )
+  }
+  const { note, caseLabel, timings } = view.evidence
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
@@ -77,10 +94,8 @@ export default function SafeguardsPage() {
       </header>
 
       <section className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-        <p className="text-xs text-slate-500">{result.safeguards.note}</p>
-        <p className="mt-1 text-xs text-slate-500">
-          Simulated case: {result.safeguards.case_label || result.safeguards.case_key}
-        </p>
+        <p className="text-xs text-slate-500">{note ?? 'No note was recorded for this evidence.'}</p>
+        <p className="mt-1 text-xs text-slate-500">Simulated case: {caseLabel ?? '—'}</p>
         <ul className="mt-3 flex flex-col gap-2">
           {timings.map((timing) => {
             const verdict = verdictFor(timing)
