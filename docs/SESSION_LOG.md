@@ -886,6 +886,61 @@ Part 2 — Authentication + Authorization: Argon2/bcrypt hashing, HttpOnly cooki
 
 ---
 
+# Checkpoint — 2026-10-08 (QA Part 2 — system/E2E/one-viewport/security validation)
+
+**Status:** 🟢 QA Part 1 + Part 2 complete — release candidate PASS WITH WARNINGS
+**Report:** [docs/QA_PART2_REPORT.md](QA_PART2_REPORT.md)
+
+## What ran
+
+- Part 1 regression first: backend **326 passed**; frontend **72 unit tests passed**; lint 0/0;
+  `tsc -b && vite build` green.
+- E2E-001 via real HTTP (fresh users): **28/28 in 11.3 s** — signup → plant → baseline simulation →
+  autonomous analysis ("Increase production throughput by 30%.") → 9 violation findings → failure
+  detail → counterfactuals → revertify → history → report + PDF (6.9 KB, `no-store`) → logout →
+  401s. IDOR battery: 4× 404.
+- Browser E2E on the live stack: full product walk including the 5-step plant wizard, live
+  telemetry, real pipeline events, safeguard timings, reverify verdict, report + PDF download.
+
+## Defects found and fixed (each with a regression test)
+
+- **BUG-01 (S2, auth shell)** — sign-out left the authenticated shell mounted: `removeQueries` on the
+  actively-mounted session query kept the observer's last result, so the provider stayed
+  `authenticated`, `LoginPage` bounced `navigate('/login')` back to `/dashboard`, and every later
+  request 401'd until a manual reload. Fixed by writing an explicit `null` via `setQueryData`
+  (`frontend/src/auth/session.ts`), pinned by headless `QueryObserver` tests that reproduce the old
+  stuck-authenticated behaviour. Commit `7c4f52d`.
+- **BUG-02 (S2, analysis UI)** — deep-linking to a re-verification record's safeguards page crashed
+  (`Cannot read properties of undefined (reading 'note')`): reverify documents have no `safeguards`
+  section. Fixed with an optional-section view helper + explicit empty state linking to the parent
+  analysis. Tests cover both stored document shapes. Commit `64fbb00`.
+
+## One-viewport audit (live DOM geometry)
+
+- 1366×768 — all eleven authenticated views (dashboard, plant, monitor, analysis/new, live,
+  investigation, safeguards, reverify, failure detail, history, report): **0/0 page scroll, zero
+  truly clipped elements**.
+- 1920×1080 dashboard, 1280×720 dashboard+monitor, 1024×768 monitor, 768×1024 monitor, 390×844
+  dashboard+monitor, 360×640 report: **all 0/0**.
+- Only flagged "clipping" was React Flow's own pan/zoom layer, clipped by design.
+
+## Failure / recovery drills
+
+- Backend stopped mid-session → "Telemetry disconnected / No telemetry yet", no crash, no fabricated
+  values; restart clears the state by itself. Cold load with the backend down fails closed to
+  `/login` (documented rule).
+- Session expiry mid-use → immediate `/dashboard → /login`, shell unmounts (BUG-01 mechanism).
+- Concurrent duplicate analysis on one plant → 1× 200 + 2× 409 single-flight; auth limit measured
+  exactly at the boundary (10× 401 then 429).
+
+## Remaining warnings
+
+- No hosted deployment exists (deployment validation BLOCKED); real Nebius/NVIDIA runtime inference
+  BLOCKED in this environment (no key). 1600×900/1440×900 viewport cells inferred, not measured.
+  React Flow attribution warning is cosmetic upstream noise.
+
+---
+
 # Checkpoint — 2026-10-02 (documentation restored)
 
 **Status:** 🟡 Documentation restored; ready for a pre-implementation Duck audit  
