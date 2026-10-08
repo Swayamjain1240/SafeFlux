@@ -2,19 +2,21 @@ import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import AppLayout from '../layouts/AppLayout'
 import PublicLayout from '../layouts/PublicLayout'
-import AnalysisNewPage from '../pages/AnalysisNewPage'
-import DashboardPage from '../pages/DashboardPage'
 import LandingPage from '../pages/LandingPage'
 import LoginPage from '../pages/LoginPage'
-import MonitorPage from '../pages/MonitorPage'
 import NotFoundPage from '../pages/NotFoundPage'
-import PlantSetupPage from '../pages/PlantSetupPage'
 import SignupPage from '../pages/SignupPage'
 import ProtectedRoute from './ProtectedRoute'
 import { LoadingFallback } from '../components/LoadingFallback'
 
-// Part 9 investigation views are route-level lazy: the dashboard/monitor bundle
-// stays small, and these load only when the engineer opens one of them.
+// Route-level lazy loading keeps the first paint small: Recharts, React Flow
+// and the evidence pages are pulled in only when their route is opened. The
+// public landing/login stay eager because they are the first screen, and the
+// Three.js twin behind the hero is a dynamic import inside them anyway.
+const DashboardPage = lazy(() => import('../pages/DashboardPage'))
+const MonitorPage = lazy(() => import('../pages/MonitorPage'))
+const PlantSetupPage = lazy(() => import('../pages/PlantSetupPage'))
+const AnalysisNewPage = lazy(() => import('../pages/AnalysisNewPage'))
 const AnalysisLivePage = lazy(() => import('../pages/AnalysisLivePage'))
 const FailureDetailPage = lazy(() => import('../pages/FailureDetailPage'))
 const InvestigationPage = lazy(() => import('../pages/InvestigationPage'))
@@ -36,10 +38,10 @@ export default function AppRoutes() {
 
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/plant" element={<PlantSetupPage />} />
-          <Route path="/monitor" element={<MonitorPage />} />
-          <Route path="/analysis/new" element={<AnalysisNewPage />} />
+          <Route path="/dashboard" element={<Suspense fallback={<LoadingFallback label="Loading dashboard…" />}><DashboardPage /></Suspense>} />
+          <Route path="/plant" element={<Suspense fallback={<LoadingFallback label="Loading plant configuration…" />}><PlantSetupPage /></Suspense>} />
+          <Route path="/monitor" element={<Suspense fallback={<LoadingFallback label="Loading live telemetry…" />}><MonitorPage /></Suspense>} />
+          <Route path="/analysis/new" element={<Suspense fallback={<LoadingFallback label="Loading analysis workspace…" />}><AnalysisNewPage /></Suspense>} />
           <Route
             path="/analysis/:id/live"
             element={
