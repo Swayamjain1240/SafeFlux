@@ -89,6 +89,39 @@ test:unit` 87/87; backend `pytest` exit 0 with no failures.
 
 ---
 
+# Debugging Duck 🦆 — full-repo audit, parts 1–10 + tests + visual change (2026-10-08)
+
+**Verdict: ON TRACK ✅** — all ten build parts are implemented and test-verified, the docs
+match the code, and the visual change landed without touching a backend contract.
+
+| Check | Evidence |
+| --- | --- |
+| Product scope / golden rule | Every verdict sentence still comes from the deterministic engine; AI explanation is stored separately and labelled. Landing/auth/report carry the "never actuates real equipment" disclaimer. |
+| Architecture | `docs/ARCHITECTURE.md` §2 tree rewritten to the real layout (was aspirational); §4 + §6 now document the visual-transformation and motion modules. |
+| AI vs simulator separation | Unchanged — `app/ai` never writes numbers; the bounded search and safety engine own every value. |
+| Auth / access control | Backend suite green (326), incl. cross-user IDOR tests on every object; protected routes in the frontend untouched. |
+| 25 security rules | Re-checked individually: secrets (no real key in tree/history — only synthetic `sk-live-…` fixtures used to prove redaction), env validation, protected routes, form validation, XSS (`dangerouslySetInnerHTML` = 0), rate limits, error envelope, CORS allowlist, security headers live (`nosniff`, `X-Frame-Options: DENY`, CSP, Referrer-Policy, Permissions-Policy, COOP/CORP), production forbids `DEBUG`, `npm audit` → 0 vulnerabilities, every dependency in use, no `.env`/`.db`/venv tracked, 130 commits (target 50+), docs synchronized, one-viewport verified. |
+| One-viewport rule | Measured in the live DOM at 1920×1080, 1600×900, 1440×900, 1366×768, 1280×720, 1024×768 and 375×812 — `document.scrollHeight <= innerHeight` on every authenticated route, no clipped controls; long content uses tabs, pagination or bounded internal scroll. |
+| Tests | `npm test` from the root runs lint → 87 frontend unit tests → typecheck+build → 326 backend tests: all green, exit 0. |
+| Hackathon integration | Pending a key, unchanged: the one controlled Nebius/NVIDIA inference still needs `NEBIUS_API_KEY` / `NEBIUS_BASE_URL` / `NEBIUS_MODEL`. |
+
+**Resolved since the last QA report:** OBS-01 (React Flow attribution warning in console) —
+the attribution is now kept visible instead of suppressed, so the console is clean; and the
+"1600×900 / 1440×900 inferred rather than measured" warning is now measured.
+
+**Still blocked (outside this repo's control):** no hosted environment for deployment
+validation; no provider key for the real inference.
+
+**Smallest useful next action:** supply `NEBIUS_*` in `Backend/.env` and run the one
+controlled inference, then point the app at a hosted environment for deployment validation.
+
+**Docs updated because the implementation changed:** README (design system + one-command
+start + current status/test counts), ARCHITECTURE (real tree, visual modules, animation
+section), SAFEFLUX_MASTER §26 (visual transformation + Part 10 QA status + narrowed next
+action).
+
+---
+
 # Checkpoint — 2026-10-07 · PART 9 IMPLEMENTED, END-TO-END WORKFLOW COMPLETE
 
 **Status:** 🟢 Part 9 (autonomous analysis, safeguard and re-verification UX) implemented and

@@ -703,7 +703,7 @@ Repository code and current docs are the technical source of truth.
 
 ## 26. Current State
 
-As of 2026-10-06:
+As of 2026-10-08:
 
 - concept, MVP scope, product workflow and tech stack locked,
 - security requirements, one-viewport UI rule, 10-part build plan and Debugging Duck
@@ -768,10 +768,30 @@ As of 2026-10-06:
   Counterfactuals/Safeguards/Evidence tabs + multi-page PDF download; the one-viewport rule
   applies to the interactive screens, the PDF is an export). Backend tests 326 passing
   (31 new); frontend unit tests 65 passing; build/lint/typecheck green.
+- **Part 10 QA (hardening/audit)** executed during QA Parts 1–2 — final security validation,
+  production-configuration validation, one-viewport matrix, responsive/accessibility/
+  performance checks and release acceptance are recorded in `docs/QA_PART1_REPORT.md` and
+  `docs/QA_PART2_REPORT.md` (**APPROVED WITH WARNINGS**: no S0/S1 defect, both S2 defects
+  fixed with regression tests; warnings = no hosted deployment exists and the real Nebius
+  inference has no key). Latest full run: backend 326 passing, frontend 87 unit tests,
+  `npm audit` 0 vulnerabilities, lint 0 warnings.
+- **Visual transformation (2026-10-08)** complete and pushed as its own commit series: a
+  dark control-room design system (tokens + instrument primitives), the rebuilt workspace
+  shell/dashboard/monitor/analysis/evidence screens, planned GSAP motion, the lazy Three.js
+  landing twin, premium auth and plant surfaces, and status colour unified on
+  `safe/warn/crit`. Verified in the browser against the one-viewport matrix
+  (1920×1080, 1600×900, 1440×900, 1366×768, 1280×720, 1024×768, 375×812), with a clean
+  console (the React Flow attribution warning OBS-01 is resolved) and a fresh end-to-end
+  walkthrough of the whole workflow over real backend data. No backend, API, schema,
+  simulator, safety or auth contract changed.
 
 ### Next action
 
-Part 10 — final hardening, deployment and audit (the ten-part plan's last build step), plus
-the one controlled real Nebius inference when `Backend/.env` carries `NEBIUS_API_KEY`,
-`NEBIUS_BASE_URL` and `NEBIUS_MODEL` (the key stays out of chat and out of Git). Submission /
-video work begins only after Part 10 passes.
+1. The one controlled real Nebius/NVIDIA inference, when `Backend/.env` carries
+   `NEBIUS_API_KEY`, `NEBIUS_BASE_URL` and `NEBIUS_MODEL` (the key stays out of chat and out
+   of Git).
+2. A hosted environment, so deployment validation can move beyond production-configuration
+   checks.
+
+Submission/video work begins only after those two BLOCKED items are cleared; the ten-part
+build plan itself is implemented and test-verified.

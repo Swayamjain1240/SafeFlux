@@ -27,45 +27,58 @@ SafeFlux/
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── api/
-│   │   ├── components/
-│   │   ├── features/
-│   │   ├── hooks/
-│   │   ├── layouts/
-│   │   ├── pages/
-│   │   ├── routes/
-│   │   ├── stores/
-│   │   ├── animations/
-│   │   ├── types/
-│   │   └── utils/
+│   │   ├── analysis/        assessment cache + evidence helpers
+│   │   ├── animation/       pure motion planners + GSAP hooks (unit-tested)
+│   │   ├── api/             typed API clients (axios + session events)
+│   │   ├── auth/            AuthProvider + session context
+│   │   ├── components/      ui/, plant/, monitor/, dashboard/, auth/, three/
+│   │   ├── dashboard/       pure dashboard view-state derivation
+│   │   ├── hooks/           TanStack Query hooks
+│   │   ├── layout/          viewport + graph-orientation classifiers
+│   │   ├── layouts/         AppLayout (workspace shell), PublicLayout
+│   │   ├── pages/           route components
+│   │   ├── routes/          route table + ProtectedRoute
+│   │   ├── search/          pure search-plan mirror (Part 7)
+│   │   ├── telemetry/       stream state machine
+│   │   ├── three/           landing digital-twin scene (lazy)
+│   │   ├── types/           API/domain mirrors
+│   │   └── utils/           validation, error message helpers
+│   ├── tests/               node --test pure-module suites (87 tests)
 │   ├── .env.example
 │   └── package.json
 │
 ├── Backend/
 │   ├── app/
 │   │   ├── main.py
-│   │   ├── api/
-│   │   ├── auth/
-│   │   ├── core/
+│   │   ├── ai/              allowlisted agent tools + provider transport
+│   │   ├── analyses/        autonomous analysis pipeline (Part 9)
+│   │   ├── api/             routers (auth, plants, simulations, searches, …)
+│   │   ├── auth/            Argon2id + JWT session
+│   │   ├── core/            settings, security headers, rate limits
 │   │   ├── database/
 │   │   ├── models/
+│   │   ├── safety/          deterministic safety engine
 │   │   ├── schemas/
-│   │   ├── simulator/
-│   │   ├── safety/
-│   │   ├── telemetry/
-│   │   ├── search/
-│   │   ├── agents/
-│   │   ├── reports/
-│   │   └── services/
-│   ├── tests/
+│   │   ├── search/          bounded boundary search (Part 7)
+│   │   ├── simulator/       lumped deterministic process model
+│   │   └── telemetry/       current/history/SSE
+│   ├── tests/               pytest suites (326 tests)
 │   ├── .env.example
 │   └── requirements.txt
+│
+├── scripts/
+│   ├── dev.mjs              `npm run dev` — backend + frontend in one command
+│   └── test.mjs             `npm test` — lint → unit → build → pytest
 │
 ├── docs/
 │   ├── SAFEFLUX_MASTER.md
 │   ├── ARCHITECTURE.md
-│   └── SESSION_LOG.md
+│   ├── SESSION_LOG.md
+│   ├── QA_TEST_PLAN.md
+│   ├── QA_PART1_REPORT.md
+│   └── QA_PART2_REPORT.md
 │
+├── package.json             root one-commands (dev / build / test)
 ├── .gitignore
 ├── README.md
 └── LICENSE
