@@ -67,8 +67,9 @@ still pending `NEBIUS_API_KEY`; every part works without it.
 | Lazy Three.js reactor digital twin on the landing hero (health-mapped, dispose-safe) | ✅ |
 | Backend test suite (pytest) | ✅ 326 passing |
 | Frontend unit tests (node) | ✅ 87 passing |
+| Final hardening + security/one-viewport/dependency audit (QA Parts 1–2) | ✅ approved with warnings |
+| Cloud deployment validation | ⏳ no hosted environment; production-config validated |
 | One controlled real Nebius/NVIDIA inference | ⏳ needs `NEBIUS_API_KEY` |
-| Hardening / deployment / audit | ⏳ Part 10 |
 
 ---
 
@@ -91,6 +92,26 @@ SafeFlux/
 
 - Python 3.12+
 - Node.js 20+ (npm 10+)
+
+## Quick start (one command)
+
+After the one-time setup below (venv + `npm install` in `frontend/`), the whole stack starts
+from the repository root with a single command:
+
+```bash
+npm run dev      # backend :8000 + frontend :5173, prefixed logs, Ctrl+C stops both
+```
+
+`scripts/dev.mjs` starts uvicorn and Vite together, labels every log line `[backend]` /
+`[frontend]`, and — if either service dies — stops the other instead of leaving a stray
+server behind. It uses the project venv when present and never inherits a generic `PORT`
+from the environment (override the API port with `SAFEFLUX_BACKEND_PORT`).
+
+One command runs the entire regression:
+
+```bash
+npm test         # lint → 87 frontend unit tests → typecheck+build → backend pytest
+```
 
 ## Backend setup
 
@@ -124,12 +145,15 @@ npm run dev                        # http://localhost:5173
 
 ```bash
 # Backend (from Backend/)
-python -m pytest -q -p no:warnings # 288 tests
+python -m pytest -q -p no:warnings # 326 tests
 
 # Frontend (from frontend/)
 npm run lint                       # oxlint, 0 warnings
 npm run test:unit                  # node --test, 87 tests
 npm run build                      # tsc --strict + vite production build
+
+# Or, from the repository root, everything in order:
+npm test
 ```
 
 ## Environment variables
