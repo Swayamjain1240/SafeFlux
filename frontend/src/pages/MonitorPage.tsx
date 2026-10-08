@@ -6,8 +6,11 @@ import { ErrorPanel } from '../components/ErrorPanel'
 import { ProcessGraph, type ProcessSnapshot } from '../components/plant/ProcessGraph'
 import { TelemetryCards } from '../components/monitor/TelemetryCards'
 import { TelemetryChart } from '../components/monitor/TelemetryChart'
+import { Panel } from '../components/ui/Panel'
 import { StatePanel } from '../components/ui/StatePanel'
+import { StatusBadge } from '../components/ui/StatusBadge'
 import { TabBar } from '../components/ui/TabBar'
+import { IconPulse } from '../components/ui/Icons'
 import { useReducedMotion } from '../animation/useReducedMotion'
 import { useRecordAssessment } from '../hooks/useAssessment'
 import { useViewport } from '../layout/useViewport'
@@ -81,6 +84,18 @@ const PHASE_LABEL: Record<string, string> = {
   error: 'Stream error',
 }
 
+const PHASE_TONE: Record<string, 'ok' | 'warn' | 'crit' | 'idle'> = {
+  live: 'ok',
+  connecting: 'warn',
+  reconnecting: 'warn',
+  error: 'crit',
+  idle: 'idle',
+  complete: 'idle',
+}
+
+const CONTROL_CLASS =
+  'rounded-md border border-edge-strong bg-surface px-2 py-1.5 text-xs text-slate-200 transition hover:border-accent/40'
+
 function SafetyPanel({ safety }: { safety: SafetyAssessment | null }) {
   if (!safety) {
     return (
@@ -91,25 +106,25 @@ function SafetyPanel({ safety }: { safety: SafetyAssessment | null }) {
   }
   return (
     <div className="space-y-2">
-      <div className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold uppercase ${STATUS_CLASS[safety.status]}`}>
+      <div className={`rounded-md border px-2.5 py-1.5 text-xs font-semibold uppercase ${STATUS_CLASS[safety.status]}`}>
         {safety.status.replace('_', ' ')}
       </div>
       <ul className="space-y-1">
         {safety.findings.map((finding) => (
           <li key={finding.type} className="flex items-center justify-between gap-2 text-[11px]">
             <span className="text-slate-300">{finding.type}</span>
-            <span className={STATUS_CLASS[finding.status].split(' ').pop()}>
+            <span className={`stat-num ${STATUS_CLASS[finding.status].split(' ').pop()}`}>
               {finding.status.replace('_', ' ')}
               {finding.measured_value !== null ? ` · ${finding.measured_value.toFixed(1)}` : ''}
             </span>
           </li>
         ))}
       </ul>
-      <ul className="space-y-1 border-t border-slate-800 pt-2">
+      <ul className="space-y-1 border-t border-edge/70 pt-2">
         {safety.safeguards
           .filter((timing) => timing.trigger_time_s !== null)
           .map((timing) => (
-            <li key={timing.safeguard} className="font-mono text-[10px] text-slate-500">
+            <li key={timing.safeguard} className="stat-num text-[10px] text-slate-500">
               {timing.safeguard}: trig {timing.trigger_time_s}s · resp{' '}
               {timing.response_time_s ?? '—'}s · viol {timing.violation_time_s ?? '—'}s ·{' '}
               <span className={timing.prevented ? 'text-emerald-400' : 'text-rose-400'}>
@@ -168,9 +183,7 @@ export default function MonitorPage() {
   }
 
   if (list.isLoading) {
-    return (
-      <StatePanel title="Loading plants…" hint="Fetching your configured plants." />
-    )
+    return <StatePanel title="Loading plants…" hint="Fetching your configured plants." />
   }
   if (list.isError) {
     return (
@@ -192,7 +205,7 @@ export default function MonitorPage() {
       <StatePanel title="No plants configured yet" hint="Create a plant before running a scenario.">
         <Link
           to="/plant"
-          className="mt-4 inline-block rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
+          className="mt-4 inline-block rounded-md bg-accent px-4 py-2 text-sm font-semibold text-void transition hover:bg-accent-soft"
         >
           Configure a plant
         </Link>
@@ -217,24 +230,32 @@ export default function MonitorPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      <div className="flex shrink-0 flex-wrap items-end justify-between gap-2">
-        <div>
-          <h1 className="text-lg font-semibold text-white">Live monitor</h1>
-          <p className="text-xs text-slate-500">
+      {/* ── Header: what is streaming, and how healthy the stream is ──────── */}
+      <header className="flex shrink-0 flex-wrap items-end justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold tracking-[0.22em] text-accent/80 uppercase">
+            Live telemetry
+          </p>
+          <h1 className="text-base font-semibold tracking-tight text-white sm:text-lg">Live monitor</h1>
+          <p className="truncate text-xs text-slate-500">
             Deterministic simulated telemetry · SSE stream · no LLM per tick.
           </p>
         </div>
-        <span className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-300">
-          <span
-            aria-hidden="true"
-            className={`h-2 w-2 rounded-full ${
-              stream.phase === 'live' ? 'bg-emerald-400' : stream.phase === 'error' ? 'bg-rose-500' : 'bg-amber-400'
-            }`}
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge
+            label={PHASE_LABEL[stream.phase] ?? stream.phase}
+            tone={PHASE_TONE[stream.phase] ?? 'idle'}
+            title="Telemetry stream state"
           />
-          {PHASE_LABEL[stream.phase] ?? stream.phase}
-        </span>
-      </div>
+          <StatusBadge
+            label={lastFrame ? `t = ${lastFrame.time_s.toFixed(0)}s` : 'no frames'}
+            tone={lastFrame ? 'ok' : 'idle'}
+            title="Simulated time from the latest streamed frame"
+          />
+        </div>
+      </header>
 
+      {/* ── Run controls ─────────────────────────────────────────────────── */}
       <div className="flex shrink-0 flex-wrap items-center gap-2">
         <select
           value={plantId ?? ''}
@@ -242,18 +263,20 @@ export default function MonitorPage() {
             setSelectedId(event.target.value)
             setStarted(false)
           }}
-          className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-200"
+          aria-label="Select plant"
+          className={CONTROL_CLASS}
         >
-          {plants.map((plant) => (
-            <option key={plant.id} value={plant.id}>
-              {plant.name}
+          {plants.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name}
             </option>
           ))}
         </select>
         <select
           value={presetId}
           onChange={(event) => setPresetId(event.target.value)}
-          className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-200"
+          aria-label="Select scenario preset"
+          className={CONTROL_CLASS}
         >
           {PRESETS.map((item) => (
             <option key={item.id} value={item.id}>
@@ -265,10 +288,14 @@ export default function MonitorPage() {
           type="button"
           onClick={handleStart}
           disabled={run.isPending || !plantId}
-          className="rounded-lg bg-cyan-500 px-4 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 rounded-md bg-accent px-4 py-1.5 text-xs font-semibold text-void transition hover:bg-accent-soft disabled:opacity-60"
         >
+          <IconPulse className="h-3.5 w-3.5" />
           {run.isPending ? 'Running…' : 'Run & stream'}
         </button>
+        <span className="text-[11px] text-slate-500">
+          {plant ? `${plant.name} · ${plant.config.feed_flow_lpm} L/min feed` : ''}
+        </span>
       </div>
 
       {run.isError && (
@@ -301,18 +328,22 @@ export default function MonitorPage() {
               className="h-52 sm:h-64"
             />
           )}
-          <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-            <p className="mb-2 text-[10px] tracking-wide text-slate-500 uppercase">
-              Safety verdict (deterministic)
-            </p>
+          <Panel
+            title="Safety verdict"
+            hint="deterministic — AI never decides this"
+            className="min-h-0 flex-1"
+            scroll
+          >
             <SafetyPanel safety={safety} />
-          </div>
+          </Panel>
         </div>
 
         {/* Chart workspace: cards + tabs (the single mobile visualization). */}
         <div className={`min-h-0 min-w-0 flex-col gap-3 ${wide ? 'flex' : monitorTab === 'telemetry' ? 'flex' : 'hidden'}`}>
           <TelemetryCards frame={lastFrame} />
-          <TelemetryChart frames={stream.frames} />
+          <div className="min-h-0 flex-1">
+            <TelemetryChart frames={stream.frames} />
+          </div>
         </div>
       </div>
     </div>

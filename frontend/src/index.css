@@ -166,8 +166,10 @@
 }
 
 .react-flow__attribution {
+  /* Licence requires the attribution to stay visible — only the tone is
+     adjusted so it sits with the theme instead of fighting it. */
   background: transparent;
-  color: #334155;
+  color: #64748b;
   font-size: 9px;
 }
 
