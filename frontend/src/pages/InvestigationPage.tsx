@@ -1,9 +1,13 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { StatePanel } from '../components/ui/StatePanel'
+import { Panel } from '../components/ui/Panel'
+import { StatusBadge } from '../components/ui/StatusBadge'
 import { TabBar, type TabItem } from '../components/ui/TabBar'
+import { IconChevronRight } from '../components/ui/Icons'
 import { useAnalysis, useResultDocument } from '../hooks/useAnalyses'
 import type { CounterfactualRow } from '../types/analysis'
+import type { Tone } from '../dashboard/viewState'
 
 /**
  * Root-cause investigation (Part 9) — counterfactual evidence first, AI second.
@@ -13,6 +17,10 @@ import type { CounterfactualRow } from '../types/analysis'
  * verdict; AI EXPLANATION (when a provider is configured) is the model's
  * narration of that evidence and can never alter it. Without a provider the
  * AI block says so instead of pretending.
+ *
+ * Visual transformation: each counterfactual is a before → after comparison
+ * card (violation vs restored verdict) built from the recorded run only. No
+ * driver ranking is invented — the list keeps the backend's own order.
  */
 
 type View = 'counterfactuals' | 'ai' | 'search'
@@ -23,49 +31,81 @@ const TABS: readonly TabItem<View>[] = [
   { id: 'search', label: 'Search context' },
 ]
 
-const STATUS_TONE: Record<string, string> = {
-  safe: 'text-emerald-300',
-  near_limit: 'text-amber-300',
-  safeguard_activated: 'text-amber-300',
-  violation: 'text-rose-300',
-}
-
-function statusClass(status: string | null | undefined): string {
-  return STATUS_TONE[status ?? ''] ?? 'text-slate-300'
+function toneForStatus(status: string | null | undefined): Tone {
+  const normalised = (status ?? '').toLowerCase()
+  if (normalised.includes('violation') || normalised.includes('shutdown')) return 'crit'
+  if (normalised.includes('near') || normalised.includes('safeguard')) return 'warn'
+  if (normalised.includes('safe')) return 'ok'
+  return 'idle'
 }
 
 function CounterfactualCard({ row }: { row: CounterfactualRow }) {
+  const beforeTone = toneForStatus(row.status_before)
+  const afterTone = toneForStatus(row.status)
+  const improved = afterTone === 'ok' && beforeTone !== 'ok'
+
   return (
-    <li className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+    <li
+      className={`panel flex flex-col gap-2 p-3 ${
+        improved ? 'border-emerald-500/40' : afterTone === 'crit' ? 'border-rose-600/40' : ''
+      }`}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-medium text-slate-100">{row.label}</h3>
-        <span className="text-xs">
-          <span className="text-slate-500">was </span>
-          <span className={statusClass(row.status_before)}>{row.status_before}</span>
-          <span className="text-slate-500"> → now </span>
-          <span className={statusClass(row.status)}>{row.status}</span>
-        </span>
+        <StatusBadge
+          label={improved ? 'restores safety in simulation' : 'still unsafe in simulation'}
+          tone={improved ? 'ok' : afterTone === 'crit' ? 'crit' : afterTone}
+        />
       </div>
-      <dl className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
-        {row.changes.map((change) => (
-          <div key={change.variable} className="rounded border border-slate-800 bg-slate-900/60 p-1.5">
-            <dt className="text-slate-500">{change.variable}</dt>
-            <dd className="text-slate-300">
-              {change.before === null ? '—' : change.before.toFixed(1)} →{' '}
-              {change.after === null ? '—' : change.after.toFixed(1)}
-              {change.delta !== null && (
-                <span className={change.delta < 0 ? ' text-emerald-300' : ' text-rose-300'}>
-                  {' '}
-                  ({change.delta > 0 ? '+' : ''}
-                  {change.delta.toFixed(1)})
-                </span>
-              )}
-            </dd>
-          </div>
-        ))}
-      </dl>
-      <p className="mt-2 text-[11px] text-slate-500">
-        Simulated case {row.case_key}; every peak came from the same deterministic engine.
+
+      {/* Before → after, from the recorded runs only */}
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+        <div className="panel-inset px-2.5 py-2">
+          <p className="text-[10px] font-semibold tracking-[0.16em] text-slate-500 uppercase">
+            original
+          </p>
+          <p className="stat-num mt-0.5 text-sm text-rose-300">{row.status_before ?? '—'}</p>
+        </div>
+        <IconChevronRight className="h-4 w-4 text-slate-600" />
+        <div className="panel-inset px-2.5 py-2">
+          <p className="text-[10px] font-semibold tracking-[0.16em] text-slate-500 uppercase">
+            after restoring
+          </p>
+          <p
+            className={`stat-num mt-0.5 text-sm ${
+              afterTone === 'ok' ? 'text-emerald-300' : afterTone === 'crit' ? 'text-rose-300' : 'text-amber-300'
+            }`}
+          >
+            {row.status}
+          </p>
+        </div>
+      </div>
+
+      {row.changes.length > 0 && (
+        <dl className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+          {row.changes.map((change) => (
+            <div key={change.variable} className="panel-inset px-2 py-1.5">
+              <dt className="truncate text-[10px] text-slate-500">{change.variable}</dt>
+              <dd className="stat-num text-xs text-slate-300">
+                {change.before === null ? '—' : change.before.toFixed(1)}
+                <span className="text-slate-600"> → </span>
+                {change.after === null ? '—' : change.after.toFixed(1)}
+                {change.delta !== null && (
+                  <span className={change.delta < 0 ? ' text-emerald-300' : ' text-rose-300'}>
+                    {' '}
+                    ({change.delta > 0 ? '+' : ''}
+                    {change.delta.toFixed(1)})
+                  </span>
+                )}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
+      <p className="text-[11px] text-slate-500">
+        Simulated case <span className="stat-num">{row.case_key}</span>; every peak came from the
+        same deterministic engine.
       </p>
     </li>
   )
@@ -132,45 +172,69 @@ function Loaded({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      <header className="shrink-0">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="min-w-0">
-            <h1 className="text-lg font-semibold text-slate-100">Root-cause investigation</h1>
-            <p className="truncate text-xs text-slate-400">{result.goal}</p>
-          </div>
-          <div className="flex gap-2 text-xs">
-            {result.pivot && (
-              <Link
-                to={`/analysis/${id}/failures/${encodeURIComponent(result.pivot.key)}`}
-                className="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-200 transition hover:bg-slate-800"
-              >
-                Worst failure
-              </Link>
-            )}
+      <header className="flex shrink-0 flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold tracking-[0.22em] text-accent/80 uppercase">
+            Root-cause investigation
+          </p>
+          <h1 className="truncate text-base font-semibold tracking-tight text-white sm:text-lg">
+            What would have prevented it?
+          </h1>
+          <p className="truncate text-xs text-slate-500">{result.goal}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          {result.pivot && (
             <Link
-              to={`/analysis/${id}/safeguards`}
-              className="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-300 transition hover:bg-slate-800"
+              to={`/analysis/${id}/failures/${encodeURIComponent(result.pivot.key)}`}
+              className="rounded-md border border-rose-600/50 px-3 py-1.5 text-rose-200 transition hover:bg-rose-950/40"
             >
-              Safeguards
+              Worst failure
             </Link>
-          </div>
+          )}
+          <Link
+            to={`/analysis/${id}/safeguards`}
+            className="rounded-md border border-edge-strong px-3 py-1.5 text-slate-300 transition hover:border-accent/40 hover:text-slate-100"
+          >
+            Safeguards
+          </Link>
+          <Link
+            to={`/analysis/${id}/reverify`}
+            className="rounded-md border border-edge-strong px-3 py-1.5 text-slate-300 transition hover:border-accent/40 hover:text-slate-100"
+          >
+            Re-verify
+          </Link>
         </div>
       </header>
 
       <TabBar tabs={TABS} active={view} onChange={setView} label="Investigation sections" />
 
-      <section className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+      <Panel
+        className="min-h-0 flex-1"
+        bodyClassName="flex min-h-0 flex-col gap-3"
+        scroll
+        title={
+          view === 'counterfactuals'
+            ? 'Simulation evidence'
+            : view === 'ai'
+              ? 'AI explanation'
+              : 'Search context'
+        }
+        hint={
+          view === 'counterfactuals'
+            ? 'real re-runs by the deterministic engine'
+            : view === 'ai'
+              ? 'narration of the evidence · cannot change a value'
+              : 'what the search actually explored'
+        }
+      >
         {view === 'counterfactuals' && (
-          <div className="flex flex-col gap-3">
-            <h2 className="text-xs font-semibold tracking-widest text-slate-400 uppercase">
-              Simulation evidence
-            </h2>
+          <>
             {result.pivot && (
-              <p className="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-xs text-slate-300">
+              <p className="panel-inset px-3 py-2 text-xs text-slate-300">
                 Anchored on the worst failure{' '}
                 <span className="font-medium text-slate-100">{result.pivot.label}</span>{' '}
-                (<span className={statusClass(result.pivot.status)}>{result.pivot.status}</span>). Each
-                counterfactual below restores one driver toward neutral and re-runs the real scenario.
+                <StatusBadge label={result.pivot.status} tone={toneForStatus(result.pivot.status)} />{' '}
+                Each card restores one driver toward neutral and re-runs the real scenario.
               </p>
             )}
             {counterfactuals.length === 0 && (
@@ -184,21 +248,26 @@ function Loaded({
                 <CounterfactualCard key={row.case_key} row={row} />
               ))}
             </ul>
-          </div>
+            {counterfactuals.length > 0 && (
+              <p className="text-[11px] text-slate-500">
+                Cards are listed in the order the backend recorded them. SafeFlux does not rank
+                drivers: each card is one comparison, and the simulator decides every verdict.
+              </p>
+            )}
+          </>
         )}
 
         {view === 'ai' && (
-          <div className="flex flex-col gap-3">
-            <h2 className="text-xs font-semibold tracking-widest text-slate-400 uppercase">
-              AI explanation
-            </h2>
+          <>
             {aiText ? (
-              <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+              <div className="panel-inset p-3">
                 {aiHeadline && <p className="text-sm font-medium text-slate-100">{aiHeadline}</p>}
-                <p className="mt-2 text-sm leading-relaxed whitespace-pre-line text-slate-300">{aiText}</p>
+                <p className="mt-2 text-sm leading-relaxed whitespace-pre-line text-slate-300">
+                  {aiText}
+                </p>
               </div>
             ) : (
-              <p className="rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-sm text-amber-200">
+              <p className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-sm text-amber-200">
                 No AI provider is configured, so the explanation is empty. The simulation evidence
                 stands on its own.
               </p>
@@ -207,40 +276,52 @@ function Loaded({
               The model narrates the recorded evidence; it cannot change a value, a verdict or a
               limit. The SIMULATION EVIDENCE tab is the authoritative record.
             </p>
-          </div>
+          </>
         )}
 
         {view === 'search' && (
-          <div className="flex flex-col gap-3 text-xs">
-            <h2 className="text-xs font-semibold tracking-widest text-slate-400 uppercase">Search context</h2>
+          <>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {Object.entries(result.original.counts ?? {}).slice(0, 8).map(([key, value]) => (
-                <div key={key} className="rounded-lg border border-slate-800 bg-slate-950/60 p-2">
-                  <p className="text-slate-500">{key.replaceAll('_', ' ')}</p>
-                  <p className="font-semibold text-slate-100">{String(value)}</p>
-                </div>
-              ))}
+              {Object.entries(result.original.counts ?? {})
+                .slice(0, 8)
+                .map(([key, value]) => (
+                  <div key={key} className="panel-inset px-2.5 py-2">
+                    <p className="truncate text-[10px] tracking-wide text-slate-500 uppercase">
+                      {key.replaceAll('_', ' ')}
+                    </p>
+                    <p className="stat-num mt-0.5 text-sm font-medium text-slate-100">
+                      {String(value)}
+                    </p>
+                  </div>
+                ))}
             </div>
             {(result.original.boundaries ?? []).length > 0 && (
               <div>
-                <h3 className="font-semibold text-slate-200">Boundary candidates</h3>
-                <ul className="mt-1 space-y-1 text-slate-400">
-                  {(result.original.boundaries as Record<string, unknown>[]).map((boundary, index) => (
-                    <li key={index} className="rounded border border-slate-800 bg-slate-950/60 px-2 py-1.5 font-mono">
-                      {JSON.stringify(boundary)}
-                    </li>
-                  ))}
+                <h3 className="text-xs font-semibold tracking-widest text-slate-400 uppercase">
+                  Boundary candidates
+                </h3>
+                <ul className="mt-1.5 space-y-1">
+                  {(result.original.boundaries as Record<string, unknown>[]).map(
+                    (boundary, index) => (
+                      <li
+                        key={index}
+                        className="stat-num panel-inset px-2.5 py-1.5 text-[11px] break-all text-slate-400"
+                      >
+                        {JSON.stringify(boundary)}
+                      </li>
+                    ),
+                  )}
                 </ul>
               </div>
             )}
-            <ul className="list-disc space-y-0.5 pl-4 text-slate-500">
+            <ul className="list-disc space-y-0.5 pl-4 text-xs text-slate-500">
               {(result.notes ?? []).map((note) => (
                 <li key={note}>{note}</li>
               ))}
             </ul>
-          </div>
+          </>
         )}
-      </section>
+      </Panel>
     </div>
   )
 }
