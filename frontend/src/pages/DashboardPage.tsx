@@ -6,11 +6,10 @@ import { classifyApiFailure, type QueryFailure } from '../api/failure'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/context'
 import { useAssessmentFor } from '../hooks/useAssessment'
-import { useHealth } from '../hooks/useHealth'
 import { usePlantList, usePlant } from '../hooks/usePlants'
 import { useReducedMotion } from '../animation/useReducedMotion'
 import { useViewport } from '../layout/useViewport'
-import { deriveDashboardView } from '../dashboard/viewState'
+import { deriveDashboardView, type Tone } from '../dashboard/viewState'
 import {
   DASHBOARD_TABS,
   isCompact,
@@ -25,6 +24,7 @@ import { FindingsPanel } from '../components/dashboard/FindingsPanel'
 import { StatePanel } from '../components/ui/StatePanel'
 import { StatusBadge } from '../components/ui/StatusBadge'
 import { TabBar } from '../components/ui/TabBar'
+import { IconPulse, IconShield } from '../components/ui/Icons'
 
 function failureOf(error: unknown): QueryFailure | null {
   if (!error) return null
@@ -37,12 +37,62 @@ const TAB_ITEMS = DASHBOARD_TABS.map((id) => ({
   label: id === 'overview' ? 'Overview' : id === 'process' ? 'Process' : 'Findings',
 }))
 
-function AnalysisStrip({ record, compact }: { record: ReturnType<typeof useAssessmentFor>; compact: boolean }) {
+/**
+ * Compact command-cell used by the status rail: uppercase caption, primary
+ * value and an optional hint — the control-room equivalent of a bezel readout.
+ */
+function CommandCell({
+  label,
+  value,
+  hint,
+  tone = 'idle',
+  icon,
+}: {
+  label: string
+  value: string
+  hint?: string
+  tone?: Tone
+  icon?: ReactNode
+}) {
+  const dot = {
+    ok: 'bg-emerald-400',
+    warn: 'bg-amber-400',
+    crit: 'bg-rose-500',
+    idle: 'bg-slate-500',
+  }[tone]
+
+  return (
+    <div className="panel-inset flex min-w-0 items-center gap-2.5 px-2.5 py-2">
+      {icon ? (
+        <span className="shrink-0 text-slate-500" aria-hidden="true">
+          {icon}
+        </span>
+      ) : (
+        <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} />
+      )}
+      <div className="min-w-0">
+        <p className="truncate text-[10px] font-semibold tracking-[0.16em] text-slate-500 uppercase">
+          {label}
+        </p>
+        <p className="truncate text-xs font-medium text-slate-200">{value}</p>
+        {hint && <p className="truncate text-[10px] text-slate-500">{hint}</p>}
+      </div>
+    </div>
+  )
+}
+
+function AnalysisStrip({
+  record,
+  compact,
+}: {
+  record: ReturnType<typeof useAssessmentFor>
+  compact: boolean
+}) {
   let body: ReactNode
   if (record) {
     body = (
       <>
-        <p className="truncate font-mono text-sm text-cyan-300">
+        <p className="stat-num truncate text-sm text-accent">
           {record.scenarioLabel ?? record.safety.scenario_id ?? 'scenario'} ·{' '}
           {record.safety.status.replace(/_/g, ' ')}
         </p>
@@ -60,8 +110,8 @@ function AnalysisStrip({ record, compact }: { record: ReturnType<typeof useAsses
         <p className="text-sm text-slate-300">No analysis in progress</p>
         {!compact && (
           <p className="mt-0.5 text-[11px] text-slate-500">
-            Run a scenario to produce a verdict ·{" "}
-            <Link to="/analysis/new" className="text-cyan-400 hover:text-cyan-300">
+            Run a scenario to produce a verdict ·{' '}
+            <Link to="/analysis/new" className="text-accent hover:text-accent-soft">
               let the search find the boundary
             </Link>
           </p>
@@ -70,8 +120,10 @@ function AnalysisStrip({ record, compact }: { record: ReturnType<typeof useAsses
     )
   }
   return (
-    <div className="shrink-0 rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-3 py-2">
-      <p className="text-[10px] tracking-wide text-slate-500 uppercase">Analysis status</p>
+    <div className="panel-inset shrink-0 border-l-2 border-l-accent/60 px-3 py-2">
+      <p className="text-[10px] font-semibold tracking-[0.16em] text-slate-500 uppercase">
+        Analysis status
+      </p>
       <div className="mt-0.5 min-w-0">{body}</div>
     </div>
   )
@@ -79,7 +131,6 @@ function AnalysisStrip({ record, compact }: { record: ReturnType<typeof useAsses
 
 export default function DashboardPage() {
   const { user } = useAuth()
-  const health = useHealth()
   const plantsQuery = usePlantList()
   const plants = plantsQuery.data?.plants ?? []
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -142,14 +193,12 @@ export default function DashboardPage() {
             tone={view.status === 'offline' || view.status === 'error' ? 'crit' : 'warn'}
             title={view.headline}
             hint={view.hint}
-            action={
-              view.status === 'empty' ? undefined : action
-            }
+            action={view.status === 'empty' ? undefined : action}
           >
             {view.status === 'empty' && (
               <Link
                 to="/plant"
-                className="mt-4 inline-block rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
+                className="mt-4 inline-block rounded-md bg-accent px-4 py-2 text-sm font-semibold text-void transition hover:bg-accent-soft"
               >
                 Configure a plant
               </Link>
@@ -157,7 +206,7 @@ export default function DashboardPage() {
             {view.status === 'session-expired' && (
               <Link
                 to="/login"
-                className="mt-4 inline-block rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
+                className="mt-4 inline-block rounded-md bg-accent px-4 py-2 text-sm font-semibold text-void transition hover:bg-accent-soft"
               >
                 Sign in again
               </Link>
@@ -199,6 +248,10 @@ export default function DashboardPage() {
       ? frame.status.replace(/_/g, ' ')
       : 'No telemetry yet'
 
+  const violations = record
+    ? record.safety.findings.filter((finding) => finding.status === 'violation').length
+    : 0
+
   const processPanel = (
     <section className="flex h-full min-h-0 min-w-0 flex-col gap-2">
       <ProcessGraph
@@ -218,26 +271,46 @@ export default function DashboardPage() {
 
   const findingsPanel = <FindingsPanel record={record} className="h-full" />
 
+  // Command rail: the four states an operator checks before anything else.
+  const rail = (
+    <div className={`grid shrink-0 gap-2 ${compact ? 'grid-cols-2' : 'grid-cols-2 xl:grid-cols-4'}`}>
+      <CommandCell
+        label="Safety state"
+        value={safetyLabel}
+        tone={view.safetyTone}
+        hint={record || frame ? 'from the deterministic engine' : 'run a scenario'}
+      />
+      <CommandCell
+        label="Telemetry"
+        value={view.streamLabel}
+        tone={view.streamTone}
+        hint={live ? 'streaming now' : 'no live stream'}
+        icon={<IconPulse className="h-4 w-4" />}
+      />
+      <CommandCell
+        label="Findings"
+        value={violations > 0 ? `${violations} violation${violations === 1 ? '' : 's'}` : 'None active'}
+        tone={violations > 0 ? 'crit' : record ? 'ok' : 'idle'}
+        hint={record ? `last run ${new Date(record.recordedAt).toLocaleTimeString()}` : 'no verdict yet'}
+        icon={<IconShield className="h-4 w-4" />}
+      />
+      <CommandCell
+        label="Plant"
+        value={plant.name}
+        tone="idle"
+        hint={plant.location || 'configured process'}
+      />
+    </div>
+  )
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
       <Header
         title="Engineering dashboard"
+        eyebrow="Command center"
         subtitle={`${user?.fullName ?? 'Engineer'} · ${plant.name}${plant.location ? ` · ${plant.location}` : ''}`}
         right={
           <>
-            <span className="hidden md:inline-flex">
-              {health.data ? (
-                <StatusBadge
-                  label={`API ${health.data.status}`}
-                  tone="ok"
-                  title={`v${health.data.version} · ${health.data.environment}`}
-                />
-              ) : health.isError ? (
-                <StatusBadge label="API offline" tone="crit" />
-              ) : (
-                <StatusBadge label="Connecting…" tone="idle" />
-              )}
-            </span>
             <select
               value={plantId ?? ''}
               onChange={(event) => {
@@ -245,7 +318,7 @@ export default function DashboardPage() {
                 setTab('overview')
               }}
               aria-label="Select plant"
-              className="max-w-40 truncate rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-200"
+              className="max-w-40 truncate rounded-md border border-edge-strong bg-surface px-2 py-1.5 text-xs text-slate-200"
             >
               {plants.map((item) => (
                 <option key={item.id} value={item.id}>
@@ -259,9 +332,9 @@ export default function DashboardPage() {
         }
       />
 
-      {!wide && (
-        <TabBar tabs={TAB_ITEMS} active={tab} onChange={setTab} label="Dashboard panels" />
-      )}
+      {rail}
+
+      {!wide && <TabBar tabs={TAB_ITEMS} active={tab} onChange={setTab} label="Dashboard panels" />}
 
       {/* The process graph gets the wider column so the full line stays
           readable at the narrow end of the wide layout (e.g. 1366×768). */}
@@ -285,16 +358,23 @@ export default function DashboardPage() {
 function Header({
   title,
   subtitle,
+  eyebrow,
   right,
 }: {
   title: string
   subtitle: string
+  eyebrow?: string
   right?: ReactNode
 }) {
   return (
-    <header className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+    <header className="flex shrink-0 flex-wrap items-end justify-between gap-2">
       <div className="min-w-0">
-        <h1 className="text-base font-semibold text-white sm:text-lg">{title}</h1>
+        {eyebrow && (
+          <p className="text-[10px] font-semibold tracking-[0.22em] text-accent/80 uppercase">
+            {eyebrow}
+          </p>
+        )}
+        <h1 className="text-base font-semibold tracking-tight text-white sm:text-lg">{title}</h1>
         <p className="truncate text-xs text-slate-500">{subtitle}</p>
       </div>
       {right && <div className="flex min-w-0 flex-wrap items-center gap-2">{right}</div>}

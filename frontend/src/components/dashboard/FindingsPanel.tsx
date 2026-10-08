@@ -1,6 +1,8 @@
 import type { AssessmentRecord } from '../../analysis/assessmentStore'
 import type { SafetyFinding, SafetyStatus } from '../../types/telemetry'
 import { StatusBadge } from '../ui/StatusBadge'
+import { Panel } from '../ui/Panel'
+import { IconAlert } from '../ui/Icons'
 import type { Tone } from '../../dashboard/viewState'
 
 const STATUS_TONE: Record<SafetyStatus, Tone> = {
@@ -20,13 +22,21 @@ function describe(finding: SafetyFinding): string {
  * "Recent findings" (Part 6): the deterministic `SafetyFinding` evidence the
  * backend returned for the last run — variable, status, measured value and
  * configured limit. No record yet is an explicit empty state, not a blank box.
+ *
+ * Visual transformation: standard instrument panel, mono measurements and a
+ * violation count in the header so a critical run is legible at a glance.
  */
-export function FindingsPanel({ record, className = '' }: { record: AssessmentRecord | null; className?: string }) {
+export function FindingsPanel({
+  record,
+  className = '',
+}: {
+  record: AssessmentRecord | null
+  className?: string
+}) {
   if (!record) {
     return (
-      <section className={`flex min-h-0 flex-col rounded-xl border border-slate-800 bg-slate-900/60 ${className}`}>
-        <Header subtitle="None yet" />
-        <div className="flex flex-1 items-center justify-center px-4 py-6 text-center">
+      <Panel title="Recent findings" hint="None yet" className={className}>
+        <div className="flex h-full min-h-0 items-center justify-center px-4 py-6 text-center">
           <div>
             <p className="text-sm text-slate-400">No safety findings recorded.</p>
             <p className="mt-1 text-xs text-slate-600">
@@ -34,45 +44,44 @@ export function FindingsPanel({ record, className = '' }: { record: AssessmentRe
             </p>
           </div>
         </div>
-      </section>
+      </Panel>
     )
   }
 
   const { findings, status, scenario_id: scenario } = record.safety
+  const violations = findings.filter((finding) => finding.status === 'violation').length
 
   return (
-    <section className={`flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-900/60 ${className}`}>
-      <Header
-        subtitle={record.scenarioLabel ?? scenario ?? 'scenario'}
-        status={status}
-      />
-      <ul className="min-h-0 flex-1 divide-y divide-slate-800 overflow-y-auto">
+    <Panel
+      title="Recent findings"
+      hint={record.scenarioLabel ?? scenario ?? 'scenario'}
+      className={className}
+      bodyClassName="p-0"
+      actions={
+        <div className="flex items-center gap-1.5">
+          {violations > 0 && (
+            <span className="inline-flex items-center gap-1 rounded border border-rose-500/40 bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium text-rose-300">
+              <IconAlert className="h-3 w-3" />
+              {violations} violation{violations === 1 ? '' : 's'}
+            </span>
+          )}
+          <StatusBadge label={status.replace('_', ' ')} tone={STATUS_TONE[status]} />
+        </div>
+      }
+    >
+      <ul className="min-h-0 flex-1 divide-y divide-edge/60 overflow-y-auto">
         {findings.map((finding) => (
           <li key={finding.type} className="flex items-center justify-between gap-2 px-3 py-2">
             <div className="min-w-0">
               <p className="truncate text-xs font-medium text-slate-200">
                 {finding.type.replace('_', ' ')}
               </p>
-              <p className="truncate font-mono text-[11px] text-slate-500">{describe(finding)}</p>
+              <p className="truncate stat-num text-[11px] text-slate-500">{describe(finding)}</p>
             </div>
             <StatusBadge label={finding.status.replace('_', ' ')} tone={STATUS_TONE[finding.status]} />
           </li>
         ))}
       </ul>
-    </section>
-  )
-}
-
-function Header({ subtitle, status }: { subtitle: string; status?: SafetyStatus }) {
-  return (
-    <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-800 px-3 py-2">
-      <p className="truncate text-[10px] tracking-wide text-slate-500 uppercase">Recent findings</p>
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="truncate font-mono text-[11px] text-slate-500">{subtitle}</span>
-        {status && (
-          <StatusBadge label={status.replace('_', ' ')} tone={STATUS_TONE[status]} />
-        )}
-      </div>
-    </div>
+    </Panel>
   )
 }

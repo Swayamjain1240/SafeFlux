@@ -32,6 +32,7 @@ export function InstrumentTile({
   caption,
   delta,
   sparkline,
+  rail,
   className = '',
 }: {
   label: string
@@ -43,6 +44,8 @@ export function InstrumentTile({
   delta?: string
   /** Recent values for the trend line (oldest → newest). */
   sparkline?: number[]
+  /** 0-100 fill against a configured limit (percentage of the limit). */
+  rail?: number
   className?: string
 }) {
   return (
@@ -61,6 +64,18 @@ export function InstrumentTile({
 
       {sparkline && sparkline.length > 1 && (
         <Sparkline values={sparkline} stroke={TONE_STROKE[tone]} className="mt-1.5 h-5 w-full" />
+      )}
+
+      {rail !== undefined && (
+        <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-edge/70">
+          <div
+            className="h-full transition-[width] duration-500"
+            style={{
+              width: `${Math.max(0, Math.min(100, rail))}%`,
+              backgroundColor: TONE_STROKE[tone],
+            }}
+          />
+        </div>
       )}
 
       {caption && <p className="mt-1 truncate text-[10px] text-slate-500">{caption}</p>}

@@ -1,25 +1,12 @@
 import type { ProcessSnapshot } from '../plant/ProcessGraph'
 import type { PlantDetail } from '../../types/plant'
-
-export type Tone = 'ok' | 'warn' | 'crit' | 'idle'
-
-const ACCENT: Record<Tone, string> = {
-  ok: 'text-emerald-300',
-  warn: 'text-amber-300',
-  crit: 'text-rose-300',
-  idle: 'text-slate-400',
-}
-
-const RAIL: Record<Tone, string> = {
-  ok: 'bg-emerald-400/70',
-  warn: 'bg-amber-400',
-  crit: 'bg-rose-500',
-  idle: 'bg-slate-600',
-}
+import type { Tone } from '../../dashboard/viewState'
+import { InstrumentTile } from '../ui/Instrument'
 
 interface Metric {
   key: string
   label: string
+  unit: string
   display: string
   sub: string
   tone: Tone
@@ -42,8 +29,11 @@ function fractionOf(value: number, limit: number): number {
  *
  * Live values come from the telemetry frame when one exists; otherwise the
  * configured/initial plant values are shown and labelled as configured — the
- * page never invents numbers. Every card is the same height so the grid never
+ * page never invents numbers. Every tile is the same height so the grid never
  * clips or overlaps at any tested viewport.
+ *
+ * Visual transformation: rendered through the instrument primitives (uppercase
+ * label, mono numeral with unit, limit rail coloured by actual thresholds).
  */
 export function MetricGrid({
   plant,
@@ -65,6 +55,7 @@ export function MetricGrid({
     {
       key: 'temperature',
       label: 'Temperature',
+      unit: '°C',
       display: values.temperature_c.toFixed(1),
       sub: `limit ${limits.max_temperature_c.toFixed(0)} °C · ${source}`,
       tone: toneAgainstLimit(values.temperature_c, limits.max_temperature_c),
@@ -73,6 +64,7 @@ export function MetricGrid({
     {
       key: 'pressure',
       label: 'Pressure',
+      unit: 'bar',
       display: values.pressure_bar.toFixed(2),
       sub: `limit ${limits.max_pressure_bar.toFixed(1)} bar · ${source}`,
       tone: toneAgainstLimit(values.pressure_bar, limits.max_pressure_bar),
@@ -81,14 +73,16 @@ export function MetricGrid({
     {
       key: 'feed',
       label: 'Feed flow',
+      unit: 'L/min',
       display: values.feed_flow_lpm.toFixed(0),
-      sub: `L/min · ${source}`,
+      sub: `${source} · pump ${values.pump_running ? 'running' : 'stopped'}`,
       tone: values.pump_running ? 'ok' : 'idle',
       fraction: null,
     },
     {
       key: 'level',
       label: 'Level',
+      unit: '%',
       display: values.level_pct.toFixed(1),
       sub: `limit ${limits.max_level_pct.toFixed(0)} % · ${source}`,
       tone: toneAgainstLimit(values.level_pct, limits.max_level_pct),
@@ -97,14 +91,16 @@ export function MetricGrid({
     {
       key: 'cooling',
       label: 'Cooling',
+      unit: '%',
       display: plant.config.cooling_pct.toFixed(0),
-      sub: 'jacket duty % · configured',
+      sub: 'jacket duty · configured',
       tone: plant.config.cooling_pct <= 0 ? 'crit' : plant.config.cooling_pct < 50 ? 'warn' : 'ok',
       fraction: plant.config.cooling_pct,
     },
     {
       key: 'valve',
       label: 'Valve',
+      unit: '%',
       display: plant.config.valve_position_pct.toFixed(0),
       sub: `outlet ${values.outlet_flow_lpm.toFixed(0)} L/min · ${source}`,
       tone: 'ok',
@@ -113,37 +109,34 @@ export function MetricGrid({
     {
       key: 'pump',
       label: 'Pump',
-      display: values.pump_running ? 'Running' : 'Stopped',
-      sub: values.pump_running ? 'P-101 · live' : 'P-101 · stopped',
+      unit: '',
+      display: values.pump_running ? 'RUN' : 'STOP',
+      sub: 'P-101 · drive',
       tone: values.pump_running ? 'ok' : 'idle',
       fraction: values.pump_running ? 100 : 0,
     },
   ]
 
   const gridColumns =
-    columns === 4 ? 'grid-cols-2 sm:grid-cols-4' : columns === 3 ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2'
+    columns === 4
+      ? 'grid-cols-2 sm:grid-cols-4'
+      : columns === 3
+        ? 'grid-cols-2 sm:grid-cols-3'
+        : 'grid-cols-2'
 
   return (
     <div className={`grid gap-2 ${gridColumns}`}>
       {metrics.map((metric) => (
-        <div
+        <InstrumentTile
           key={metric.key}
-          className="min-w-0 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2"
-        >
-          <p className="truncate text-[10px] tracking-wide text-slate-500 uppercase">{metric.label}</p>
-          <p className={`mt-0.5 truncate font-mono text-lg font-semibold ${ACCENT[metric.tone]}`}>
-            {metric.display}
-          </p>
-          <div className="mt-1 h-1 w-full overflow-hidden rounded bg-slate-800">
-            <div
-              className={`h-full transition-[width] duration-500 ${RAIL[metric.tone]}`}
-              style={{ width: `${metric.fraction ?? 0}%` }}
-            />
-          </div>
-          <p className={`mt-1 truncate font-mono ${compact ? 'text-[10px]' : 'text-[11px]'} text-slate-500`}>
-            {metric.sub}
-          </p>
-        </div>
+          label={metric.label}
+          value={metric.display}
+          unit={metric.unit || undefined}
+          tone={metric.tone}
+          caption={metric.sub}
+          rail={metric.fraction ?? undefined}
+          className={compact ? 'px-2 py-1.5' : ''}
+        />
       ))}
     </div>
   )
