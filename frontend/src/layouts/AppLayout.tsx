@@ -94,7 +94,7 @@ export default function AppLayout() {
           <button
             type="button"
             onClick={() => void handleSignOut()}
-            className="inline-flex items-center gap-1.5 rounded-md border border-edge-strong px-2.5 py-1.5 text-xs text-slate-300 transition hover:border-crit/40 hover:bg-crit/10 hover:text-rose-200"
+            className="inline-flex items-center gap-1.5 rounded-md border border-edge-strong px-2.5 py-1.5 text-xs text-slate-300 transition hover:border-crit/40 hover:bg-crit/10 hover:text-crit"
           >
             <IconSignOut className="h-3.5 w-3.5 md:hidden" />
             <span className="hidden md:inline">Sign out</span>
@@ -136,7 +136,7 @@ export default function AppLayout() {
               <p className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-400">
                 <span
                   aria-hidden="true"
-                  className={`h-1.5 w-1.5 rounded-full ${apiOnline ? 'bg-emerald-400' : health.isPending ? 'bg-slate-500' : 'bg-rose-500'}`}
+                  className={`h-1.5 w-1.5 rounded-full ${apiOnline ? 'bg-safe' : health.isPending ? 'bg-slate-500' : 'bg-crit'}`}
                 />
                 {apiLabel}
               </p>

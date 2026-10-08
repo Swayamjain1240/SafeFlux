@@ -54,11 +54,11 @@ function StageRail({ events, status }: { events: AnalysisEventOut[]; status: str
     <ol className="flex shrink-0 items-stretch gap-1.5 overflow-x-auto" aria-label="Agent stages">
       {stages.map((stage, index) => {
         const tone =
-          stage.state === 'complete' ? 'border-emerald-500/40 bg-emerald-500/5' : stage.state === 'active' ? 'border-accent/50 bg-accent/10 glow-accent' : 'border-edge/70 bg-panel/60'
+          stage.state === 'complete' ? 'border-safe/40 bg-safe/5' : stage.state === 'active' ? 'border-accent/50 bg-accent/10 glow-accent' : 'border-edge/70 bg-panel/60'
         const dot =
-          stage.state === 'complete' ? 'bg-emerald-400' : stage.state === 'active' ? 'bg-accent' : 'bg-slate-600'
+          stage.state === 'complete' ? 'bg-safe' : stage.state === 'active' ? 'bg-accent' : 'bg-slate-600'
         const text =
-          stage.state === 'complete' ? 'text-emerald-200' : stage.state === 'active' ? 'text-accent' : 'text-slate-500'
+          stage.state === 'complete' ? 'text-safe' : stage.state === 'active' ? 'text-accent' : 'text-slate-500'
         return (
           <li key={stage.id} className="flex min-w-0 flex-1 items-center gap-1.5">
             <div className={`flex min-w-0 flex-1 items-center gap-2 rounded-md border px-2.5 py-2 ${tone}`}>
@@ -218,7 +218,7 @@ function EventTimeline({
         </p>
       )}
       {pollError && events.length === 0 && (
-        <p role="alert" className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-sm text-amber-200">
+        <p role="alert" className="rounded-md border border-warn/40 bg-warn/5 px-3 py-2 text-sm text-warn">
           The event stream could not be read. The run itself is unaffected; retry will pick up
           where the cursor stopped.
         </p>
@@ -253,17 +253,17 @@ function EventTimeline({
         </p>
       )}
       {status === 'complete' && (
-        <p className="rounded-md border border-emerald-500/40 bg-emerald-500/5 px-3 py-2 text-sm text-emerald-200">
+        <p className="rounded-md border border-safe/40 bg-safe/5 px-3 py-2 text-sm text-safe">
           Analysis complete. The full evidence document is stored — open it from the evidence page.
         </p>
       )}
       {status === 'failed' && (
-        <p className="rounded-md border border-rose-600/50 bg-rose-950/40 px-3 py-2 text-sm text-rose-200">
+        <p className="rounded-md border border-crit/50 bg-crit/10 px-3 py-2 text-sm text-crit">
           Analysis failed. The events above are the record of how far it got.
         </p>
       )}
       {status === 'interrupted' && (
-        <p className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-sm text-amber-200">
+        <p className="rounded-md border border-warn/40 bg-warn/5 px-3 py-2 text-sm text-warn">
           The backend restarted while this run was in flight; its outcome is unknown. Re-run the
           analysis to produce a complete record.
         </p>

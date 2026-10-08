@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { IconAlert } from './ui/Icons'
 
 interface Props {
   children: ReactNode
@@ -26,11 +27,11 @@ export class ErrorBoundary extends Component<Props, State> {
   render(): ReactNode {
     if (this.state.hasError) {
       return (
-        <div className="flex h-full min-h-[60vh] flex-col items-center justify-center gap-4 p-8 text-center">
-          <span aria-hidden="true" className="text-4xl">
-            ⚠️
+        <div className="grid-bg flex h-full min-h-[60vh] flex-col items-center justify-center gap-4 p-8 text-center">
+          <span className="flex h-11 w-11 items-center justify-center rounded-md border border-crit/50 bg-crit/10">
+            <IconAlert className="h-5 w-5 text-crit" />
           </span>
-          <h1 className="text-xl font-semibold text-slate-100">Something went wrong</h1>
+          <h1 className="text-lg font-semibold text-slate-100">Something went wrong</h1>
           <p className="max-w-md text-sm leading-relaxed text-slate-400">
             The interface hit an unexpected error. Reload to try again. No plant, simulation or
             analysis was affected.
@@ -38,7 +39,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-cyan-400"
+            className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-void transition hover:bg-accent-soft"
           >
             Reload application
           </button>

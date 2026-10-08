@@ -55,9 +55,9 @@ function CommandCell({
   icon?: ReactNode
 }) {
   const dot = {
-    ok: 'bg-emerald-400',
-    warn: 'bg-amber-400',
-    crit: 'bg-rose-500',
+    ok: 'bg-safe',
+    warn: 'bg-warn',
+    crit: 'bg-crit',
     idle: 'bg-slate-500',
   }[tone]
 

@@ -151,7 +151,7 @@ export function TelemetryChart({ frames }: { frames: StreamFrame[] }) {
             </button>
           ))}
           {firstViolation !== null && (
-            <span className="ml-auto self-center pr-1 text-[10px] text-rose-300">
+            <span className="ml-auto self-center pr-1 text-[10px] text-crit">
               first violation at t = {firstViolation.toFixed(0)}s
             </span>
           )}

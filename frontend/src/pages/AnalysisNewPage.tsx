@@ -60,7 +60,7 @@ function SearchSpaceMotif() {
       {heights.map((height, index) => (
         <span
           key={`${height}-${index}`}
-          className={`w-full rounded-sm ${index === 7 ? 'bg-amber-400/80' : 'bg-accent/25'}`}
+          className={`w-full rounded-sm ${index === 7 ? 'bg-warn/80' : 'bg-accent/25'}`}
           style={{ height }}
         />
       ))}
@@ -183,7 +183,7 @@ export default function AnalysisNewPage() {
               <span className="stat-num">{goal.length}/2000</span>
             </div>
             {error && (
-              <p role="alert" className="rounded-md border border-rose-600/50 bg-rose-950/40 px-3 py-2 text-sm text-rose-200">
+              <p role="alert" className="rounded-md border border-crit/50 bg-crit/10 px-3 py-2 text-sm text-crit">
                 {error}
               </p>
             )}

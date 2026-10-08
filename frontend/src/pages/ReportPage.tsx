@@ -110,7 +110,7 @@ export default function ReportPage() {
         {downloadError && (
           <p
             role="alert"
-            className="rounded-md border border-rose-600/50 bg-rose-950/40 px-3 py-2 text-xs text-rose-200"
+            className="rounded-md border border-crit/50 bg-crit/10 px-3 py-2 text-xs text-crit"
           >
             {downloadError}
           </p>
@@ -130,7 +130,7 @@ function FailureList({
 }) {
   if (failures.length === 0) {
     return (
-      <p className="rounded-md border border-emerald-500/40 bg-emerald-500/5 px-3 py-2 text-sm text-emerald-200">
+      <p className="rounded-md border border-safe/40 bg-safe/5 px-3 py-2 text-sm text-safe">
         No unsafe condition was detected within the tested simulation scenarios.
       </p>
     )
@@ -264,9 +264,9 @@ function TabContent({ report, tab }: { report: ReportPayload; tab: TabId }) {
             <span
               className={
                 timing.prevented === false
-                  ? 'text-rose-300'
+                  ? 'text-crit'
                   : timing.prevented === true
-                    ? 'text-emerald-300'
+                    ? 'text-safe'
                     : 'text-slate-400'
               }
             >

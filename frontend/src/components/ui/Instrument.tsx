@@ -11,9 +11,9 @@
 import type { Tone } from '../../dashboard/viewState'
 
 const TONE_TEXT: Record<Tone, string> = {
-  ok: 'text-emerald-300',
-  warn: 'text-amber-300',
-  crit: 'text-rose-300',
+  ok: 'text-safe',
+  warn: 'text-warn',
+  crit: 'text-crit',
   idle: 'text-slate-300',
 }
 

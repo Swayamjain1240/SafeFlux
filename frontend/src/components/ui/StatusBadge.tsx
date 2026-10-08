@@ -1,16 +1,16 @@
 import type { Tone } from '../../dashboard/viewState'
 
 const TONE_CLASS: Record<Tone, string> = {
-  ok: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
-  warn: 'border-amber-500/40 bg-amber-500/10 text-amber-300',
-  crit: 'border-rose-500/50 bg-rose-500/10 text-rose-300',
-  idle: 'border-slate-700 bg-slate-900 text-slate-400',
+  ok: 'border-safe/40 bg-safe/10 text-safe',
+  warn: 'border-warn/40 bg-warn/10 text-warn',
+  crit: 'border-crit/50 bg-crit/10 text-crit',
+  idle: 'border-edge bg-panel text-slate-400',
 }
 
 const DOT_CLASS: Record<Tone, string> = {
-  ok: 'bg-emerald-400',
-  warn: 'bg-amber-400',
-  crit: 'bg-rose-500',
+  ok: 'bg-safe',
+  warn: 'bg-warn',
+  crit: 'bg-crit',
   idle: 'bg-slate-500',
 }
 

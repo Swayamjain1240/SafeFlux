@@ -3,9 +3,9 @@ import type { ReactNode } from 'react'
 export type StateTone = 'neutral' | 'warn' | 'crit'
 
 const TONE_CLASS: Record<StateTone, string> = {
-  neutral: 'border-slate-800 bg-slate-900/50 text-slate-300',
-  warn: 'border-amber-500/40 bg-amber-500/5 text-amber-200',
-  crit: 'border-rose-600/50 bg-rose-950/40 text-rose-200',
+  neutral: 'border-edge/80 bg-panel/60 text-slate-300',
+  warn: 'border-warn/40 bg-warn/5 text-warn',
+  crit: 'border-crit/50 bg-crit/10 text-crit',
 }
 
 export interface StatePanelAction {

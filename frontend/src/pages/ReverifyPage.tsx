@@ -104,7 +104,7 @@ export default function ReverifyPage() {
         hint="nothing outside the simulation changes"
       >
         {!hasFailures ? (
-          <p className="rounded-md border border-emerald-500/40 bg-emerald-500/5 px-3 py-2 text-sm text-emerald-200">
+          <p className="rounded-md border border-safe/40 bg-safe/5 px-3 py-2 text-sm text-safe">
             The parent analysis found no failing scenarios, so there is nothing to re-verify:
             within the tested simulation scenarios, no unsafe condition was detected.
           </p>
@@ -197,7 +197,7 @@ function MitigationForm({
       {error && (
         <p
           role="alert"
-          className="rounded-md border border-rose-600/50 bg-rose-950/40 px-3 py-2 text-sm text-rose-200"
+          className="rounded-md border border-crit/50 bg-crit/10 px-3 py-2 text-sm text-crit"
         >
           {error}
         </p>
@@ -226,7 +226,7 @@ function Comparison({ document }: { document: ReverifyDocument }) {
           <p className="text-[10px] font-semibold tracking-[0.18em] text-slate-500 uppercase">
             Before
           </p>
-          <p className="stat-num mt-1 text-2xl leading-none text-rose-300">
+          <p className="stat-num mt-1 text-2xl leading-none text-crit">
             {document.comparison.failing_before}
           </p>
           <p className="mt-1 text-[11px] text-slate-500">failing scenarios recorded</p>
@@ -236,7 +236,7 @@ function Comparison({ document }: { document: ReverifyDocument }) {
         </div>
         <div
           className={`panel-inset flex flex-col justify-center px-3 py-2.5 ${
-            improved ? 'border-emerald-500/40' : 'border-amber-500/40'
+            improved ? 'border-safe/40' : 'border-warn/40'
           }`}
         >
           <p className="text-[10px] font-semibold tracking-[0.18em] text-slate-500 uppercase">
@@ -244,7 +244,7 @@ function Comparison({ document }: { document: ReverifyDocument }) {
           </p>
           <p
             className={`stat-num mt-1 text-2xl leading-none ${
-              improved ? 'text-emerald-300' : 'text-amber-300'
+              improved ? 'text-safe' : 'text-warn'
             }`}
           >
             {document.comparison.failing_after}
@@ -283,7 +283,7 @@ function Comparison({ document }: { document: ReverifyDocument }) {
         </table>
       </div>
 
-      <p className={`text-sm ${improved ? 'text-emerald-200' : 'text-amber-200'}`}>
+      <p className={`text-sm ${improved ? 'text-safe' : 'text-warn'}`}>
         {document.verdict}
       </p>
       <p className="text-[11px] text-slate-500">{document.note}</p>

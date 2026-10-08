@@ -6,8 +6,8 @@ export function Logo({ to = '/', compact = false }: { to?: string; compact?: boo
       <svg viewBox="0 0 32 32" aria-hidden="true" className="h-7 w-7 shrink-0">
         <path
           d="M16 2 4 7v9c0 7.2 5.1 12.4 12 14 6.9-1.6 12-6.8 12-14V7L16 2Z"
-          fill="#0f172a"
-          stroke="#22d3ee"
+          fill="#0b0f14"
+          stroke="#00d9ff"
           strokeWidth="1.6"
         />
         <path
@@ -16,7 +16,7 @@ export function Logo({ to = '/', compact = false }: { to?: string; compact?: boo
         />
       </svg>
       <span className="text-base font-semibold tracking-tight text-slate-100">
-        Safe<span className="text-cyan-400">Flux</span>
+        Safe<span className="text-accent">Flux</span>
       </span>
       {!compact && (
         <span className="hidden text-xs text-slate-500 lg:inline">

@@ -33,30 +33,30 @@ type UnitNodeData = Record<string, unknown> & {
 type UnitNode = Node<UnitNodeData, 'unit'>
 
 const TONE_CLASS: Record<Tone, string> = {
-  ok: 'border-emerald-500/50 bg-emerald-500/5',
-  warn: 'border-amber-500/50 bg-amber-500/5',
-  idle: 'border-slate-700 bg-slate-900/70',
+  ok: 'border-safe/45 bg-safe/5',
+  warn: 'border-warn/50 bg-warn/5',
+  idle: 'border-edge-strong bg-surface/80',
 }
 
 const TONE_DOT: Record<Tone, string> = {
-  ok: 'bg-emerald-400',
-  warn: 'bg-amber-400',
+  ok: 'bg-safe',
+  warn: 'bg-warn',
   idle: 'bg-slate-500',
 }
 
 const UnitNodeComponent = memo(function UnitNodeComponent({ data }: NodeProps<UnitNode>) {
   return (
     <div
-      className={`w-44 rounded-xl border px-3 py-2 text-left shadow-lg ${TONE_CLASS[data.tone]}`}
+      className={`w-44 rounded-md border px-3 py-2 text-left shadow-lg ${TONE_CLASS[data.tone]}`}
     >
-      <Handle type="target" position={Position.Left} className="!bg-cyan-500" />
+      <Handle type="target" position={Position.Left} className="!bg-accent" />
       <div className="flex items-center gap-2">
         <span aria-hidden="true" className={`h-2 w-2 rounded-full ${TONE_DOT[data.tone]}`} />
         <p className="text-xs font-semibold text-slate-100">{data.title}</p>
       </div>
       <p className="mt-1 text-[10px] tracking-wide text-slate-400 uppercase">{data.subtitle}</p>
-      <p className="mt-1 font-mono text-[11px] text-cyan-300">{data.detail}</p>
-      <Handle type="source" position={Position.Right} className="!bg-cyan-500" />
+      <p className="stat-num mt-1 text-[11px] text-accent">{data.detail}</p>
+      <Handle type="source" position={Position.Right} className="!bg-accent" />
     </div>
   )
 })
@@ -144,13 +144,12 @@ export function ProcessTopology({ plant }: { plant: PlantDetail }) {
   const { nodes, edges } = useMemo(() => buildGraph(plant), [plant])
 
   return (
-    <div className="h-52 w-full overflow-hidden rounded-xl border border-slate-800 bg-slate-950 sm:h-64">
+    <div className="h-full min-h-0 w-full overflow-hidden">
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
         fitView
-        proOptions={{ hideAttribution: true }}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={false}
@@ -158,7 +157,7 @@ export function ProcessTopology({ plant }: { plant: PlantDetail }) {
         panOnScroll={false}
         preventScrolling={false}
       >
-        <Background color="#1e293b" gap={20} />
+        <Background color="#1e2a38" gap={20} />
         <Controls showInteractive={false} />
       </ReactFlow>
     </div>

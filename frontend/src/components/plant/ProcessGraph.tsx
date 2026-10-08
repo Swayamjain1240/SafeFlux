@@ -52,24 +52,24 @@ type UnitNodeData = {
 type UnitNode = Node<UnitNodeData, 'unit'>
 
 const CARD_TONE: Record<Tone, string> = {
-  ok: 'border-emerald-500/45 bg-emerald-500/5',
-  warn: 'border-amber-500/55 bg-amber-500/10',
-  crit: 'border-rose-500/60 bg-rose-500/10',
-  idle: 'border-slate-700 bg-slate-900/80',
+  ok: 'border-safe/45 bg-safe/5',
+  warn: 'border-warn/50 bg-warn/8',
+  crit: 'border-crit/55 bg-crit/10',
+  idle: 'border-edge-strong bg-surface/85',
 }
 
 const DOT_TONE: Record<Tone, string> = {
-  ok: 'bg-emerald-400',
-  warn: 'bg-amber-400',
-  crit: 'bg-rose-500',
+  ok: 'bg-safe',
+  warn: 'bg-warn',
+  crit: 'bg-crit',
   idle: 'bg-slate-500',
 }
 
 const PULSE_TONE: Record<Tone, string> = {
-  ok: 'border-emerald-400/70',
-  warn: 'border-amber-400',
-  crit: 'border-rose-500',
-  idle: 'border-slate-600',
+  ok: 'border-safe/70',
+  warn: 'border-warn',
+  crit: 'border-crit',
+  idle: 'border-edge-strong',
 }
 
 // Narrower cards and a shorter pitch keep the whole line legible when it has to
@@ -90,19 +90,19 @@ const UnitNodeComponent = memo(function UnitNodeComponent({ data }: NodeProps<Un
     <div className={`relative ${NODE_WIDTH}`}>
       {/* Explicit handle ids so the utility edges (heater/cooling/sensors)
           can attach to the top/bottom while the process line uses left/right. */}
-      <Handle type="target" id="left" position={Position.Left} className="!bg-cyan-500/80" />
-      <Handle type="source" id="right" position={Position.Right} className="!bg-cyan-500/80" />
-      <Handle type="target" id="top" position={Position.Top} className="!bg-cyan-500/80" />
-      <Handle type="source" id="bottom" position={Position.Bottom} className="!bg-cyan-500/80" />
+      <Handle type="target" id="left" position={Position.Left} className="!bg-accent/80" />
+      <Handle type="source" id="right" position={Position.Right} className="!bg-accent/80" />
+      <Handle type="target" id="top" position={Position.Top} className="!bg-accent/80" />
+      <Handle type="source" id="bottom" position={Position.Bottom} className="!bg-accent/80" />
       <div
         data-sf-state={data.flash ? '' : undefined}
-        className={`relative rounded-xl border px-3 py-2 text-left shadow-lg ${CARD_TONE[data.tone]}`}
+        className={`relative rounded-md border px-3 py-2 text-left shadow-lg ${CARD_TONE[data.tone]}`}
       >
         {data.pulse && (
           <span
             data-sf-pulse=""
             aria-hidden="true"
-            className={`pointer-events-none absolute -inset-px rounded-xl border ${PULSE_TONE[data.tone]}`}
+            className={`pointer-events-none absolute -inset-px rounded-md border ${PULSE_TONE[data.tone]}`}
           />
         )}
         <div className="relative flex items-center gap-2">
@@ -112,12 +112,12 @@ const UnitNodeComponent = memo(function UnitNodeComponent({ data }: NodeProps<Un
             <span
               data-sf-rotor=""
               aria-hidden="true"
-              className="ml-auto h-3 w-3 shrink-0 rounded-full border-2 border-dashed border-emerald-400/80"
+              className="ml-auto h-3 w-3 shrink-0 rounded-full border-2 border-dashed border-safe/80"
             />
           )}
         </div>
         <p className="relative mt-1 text-[10px] tracking-wide text-slate-400 uppercase">{data.subtitle}</p>
-        <p className="relative font-mono text-[11px] text-cyan-300">{data.detail}</p>
+        <p className="stat-num relative text-[11px] text-accent">{data.detail}</p>
       </div>
     </div>
   )
@@ -401,7 +401,7 @@ export function ProcessGraph({
   return (
     <div
       ref={container}
-      className={`overflow-hidden rounded-xl border border-slate-800 bg-slate-950 ${className}`}
+      className={`overflow-hidden rounded-md border border-edge/80 bg-void/50 ${className}`}
     >
       <ReactFlow
         nodes={nodes}
@@ -411,7 +411,6 @@ export function ProcessGraph({
         fitView
         minZoom={MIN_ZOOM}
         fitViewOptions={FIT_VIEW}
-        proOptions={{ hideAttribution: true }}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={false}
@@ -419,7 +418,7 @@ export function ProcessGraph({
         panOnScroll={false}
         preventScrolling={false}
       >
-        <Background color="#1e293b" gap={20} />
+        <Background color="#1e2a38" gap={20} />
         <Controls showInteractive={false} />
       </ReactFlow>
     </div>

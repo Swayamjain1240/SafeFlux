@@ -299,7 +299,7 @@ export default function FailureDetailPage() {
         <div className="min-w-0">
           <p
             className={`text-[10px] font-semibold tracking-[0.22em] uppercase ${
-              criticalFailure ? 'text-rose-300' : 'text-amber-300'
+              criticalFailure ? 'text-crit' : 'text-warn'
             }`}
           >
             {criticalFailure ? 'Critical failure' : 'Failure evidence'}
@@ -406,12 +406,12 @@ export default function FailureDetailPage() {
         {view === 'limits' && (
           <>
             {detail.first_violation && (
-              <div className="flex gap-2 rounded-md border border-rose-600/50 bg-rose-950/40 p-3 text-xs text-rose-100 glow-crit">
-                <IconAlert className="mt-0.5 h-4 w-4 shrink-0 text-rose-300" />
+              <div className="flex gap-2 rounded-md border border-crit/50 bg-crit/10 p-3 text-xs text-crit glow-crit">
+                <IconAlert className="mt-0.5 h-4 w-4 shrink-0 text-crit" />
                 <div className="min-w-0">
                   <p className="font-semibold">First violation</p>
                   <p className="mt-1">{detail.first_violation.message}</p>
-                  <p className="stat-num mt-1 text-rose-300/80">
+                  <p className="stat-num mt-1 text-crit/80">
                     at {detail.first_violation.timestamp_s}s · measured{' '}
                     {detail.first_violation.measured_value?.toFixed(2)} · limit{' '}
                     {detail.first_violation.limit}

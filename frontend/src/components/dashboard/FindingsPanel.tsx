@@ -60,7 +60,7 @@ export function FindingsPanel({
       actions={
         <div className="flex items-center gap-1.5">
           {violations > 0 && (
-            <span className="inline-flex items-center gap-1 rounded border border-rose-500/40 bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium text-rose-300">
+            <span className="inline-flex items-center gap-1 rounded border border-crit/40 bg-crit/10 px-1.5 py-0.5 text-[10px] font-medium text-crit">
               <IconAlert className="h-3 w-3" />
               {violations} violation{violations === 1 ? '' : 's'}
             </span>

@@ -36,8 +36,8 @@ function verdictFor(timing: SafeguardTiming): { text: string; tone: VerdictTone 
 }
 
 const TONE_CLASS: Record<VerdictTone, string> = {
-  ok: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
-  late: 'border-rose-500/50 bg-rose-500/10 text-rose-300',
+  ok: 'border-safe/40 bg-safe/10 text-safe',
+  late: 'border-crit/50 bg-crit/10 text-crit',
   idle: 'border-edge bg-surface text-slate-400',
 }
 

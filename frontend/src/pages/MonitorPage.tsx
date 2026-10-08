@@ -60,10 +60,10 @@ const PRESETS: Preset[] = [
 ]
 
 const STATUS_CLASS: Record<SafetyStatus, string> = {
-  safe: 'border-emerald-500/40 bg-emerald-500/5 text-emerald-300',
-  near_limit: 'border-amber-500/40 bg-amber-500/5 text-amber-300',
-  safeguard_activated: 'border-cyan-500/40 bg-cyan-500/5 text-cyan-300',
-  violation: 'border-rose-500/50 bg-rose-500/10 text-rose-300',
+  safe: 'border-safe/40 bg-safe/5 text-safe',
+  near_limit: 'border-warn/40 bg-warn/5 text-warn',
+  safeguard_activated: 'border-accent/40 bg-accent/5 text-accent',
+  violation: 'border-crit/50 bg-crit/10 text-crit',
 }
 
 type AnyStatus = 'safe' | 'near_limit' | 'safeguard_activated' | 'violation' | 'unknown'
@@ -127,7 +127,7 @@ function SafetyPanel({ safety }: { safety: SafetyAssessment | null }) {
             <li key={timing.safeguard} className="stat-num text-[10px] text-slate-500">
               {timing.safeguard}: trig {timing.trigger_time_s}s · resp{' '}
               {timing.response_time_s ?? '—'}s · viol {timing.violation_time_s ?? '—'}s ·{' '}
-              <span className={timing.prevented ? 'text-emerald-400' : 'text-rose-400'}>
+              <span className={timing.prevented ? 'text-safe' : 'text-crit'}>
                 {timing.prevented === null ? 'n/a' : timing.prevented ? 'prevented' : 'too late'}
               </span>
             </li>

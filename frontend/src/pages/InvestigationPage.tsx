@@ -47,7 +47,7 @@ function CounterfactualCard({ row }: { row: CounterfactualRow }) {
   return (
     <li
       className={`panel flex flex-col gap-2 p-3 ${
-        improved ? 'border-emerald-500/40' : afterTone === 'crit' ? 'border-rose-600/40' : ''
+        improved ? 'border-safe/40' : afterTone === 'crit' ? 'border-crit/50/40' : ''
       }`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -64,7 +64,7 @@ function CounterfactualCard({ row }: { row: CounterfactualRow }) {
           <p className="text-[10px] font-semibold tracking-[0.16em] text-slate-500 uppercase">
             original
           </p>
-          <p className="stat-num mt-0.5 text-sm text-rose-300">{row.status_before ?? '—'}</p>
+          <p className="stat-num mt-0.5 text-sm text-crit">{row.status_before ?? '—'}</p>
         </div>
         <IconChevronRight className="h-4 w-4 text-slate-600" />
         <div className="panel-inset px-2.5 py-2">
@@ -73,7 +73,7 @@ function CounterfactualCard({ row }: { row: CounterfactualRow }) {
           </p>
           <p
             className={`stat-num mt-0.5 text-sm ${
-              afterTone === 'ok' ? 'text-emerald-300' : afterTone === 'crit' ? 'text-rose-300' : 'text-amber-300'
+              afterTone === 'ok' ? 'text-safe' : afterTone === 'crit' ? 'text-crit' : 'text-warn'
             }`}
           >
             {row.status}
@@ -91,7 +91,7 @@ function CounterfactualCard({ row }: { row: CounterfactualRow }) {
                 <span className="text-slate-600"> → </span>
                 {change.after === null ? '—' : change.after.toFixed(1)}
                 {change.delta !== null && (
-                  <span className={change.delta < 0 ? ' text-emerald-300' : ' text-rose-300'}>
+                  <span className={change.delta < 0 ? ' text-safe' : ' text-crit'}>
                     {' '}
                     ({change.delta > 0 ? '+' : ''}
                     {change.delta.toFixed(1)})
@@ -186,7 +186,7 @@ function Loaded({
           {result.pivot && (
             <Link
               to={`/analysis/${id}/failures/${encodeURIComponent(result.pivot.key)}`}
-              className="rounded-md border border-rose-600/50 px-3 py-1.5 text-rose-200 transition hover:bg-rose-950/40"
+              className="rounded-md border border-crit/50 px-3 py-1.5 text-crit transition hover:bg-crit/10"
             >
               Worst failure
             </Link>
@@ -267,7 +267,7 @@ function Loaded({
                 </p>
               </div>
             ) : (
-              <p className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-sm text-amber-200">
+              <p className="rounded-md border border-warn/40 bg-warn/5 px-3 py-2 text-sm text-warn">
                 No AI provider is configured, so the explanation is empty. The simulation evidence
                 stands on its own.
               </p>
