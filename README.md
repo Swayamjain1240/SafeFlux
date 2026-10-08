@@ -62,8 +62,11 @@ still pending `NEBIUS_API_KEY`; every part works without it.
 | Safeguard page: trigger / response / violation times in required language | ✅ |
 | Reverify: bounded mitigation form → re-run affected scenarios → before/after | ✅ |
 | Paginated history + tabbed interactive report + multi-page PDF download | ✅ |
+| Dark control-room design system (tokens, instrument primitives, one-viewport shell) | ✅ |
+| Planned GSAP motion (process flow, recorded-sequence reveal, stage rail, page transitions) | ✅ |
+| Lazy Three.js reactor digital twin on the landing hero (health-mapped, dispose-safe) | ✅ |
 | Backend test suite (pytest) | ✅ 326 passing |
-| Frontend unit tests (node) | ✅ 65 passing |
+| Frontend unit tests (node) | ✅ 87 passing |
 | One controlled real Nebius/NVIDIA inference | ⏳ needs `NEBIUS_API_KEY` |
 | Hardening / deployment / audit | ⏳ Part 10 |
 
@@ -125,7 +128,7 @@ python -m pytest -q -p no:warnings # 288 tests
 
 # Frontend (from frontend/)
 npm run lint                       # oxlint, 0 warnings
-npm run test:unit                  # node --test, 65 tests
+npm run test:unit                  # node --test, 87 tests
 npm run build                      # tsc --strict + vite production build
 ```
 
@@ -306,6 +309,35 @@ cards and a **Recharts** chart with Temperature / Pressure / Level / Flow tabs, 
 deterministic safety verdict from the last run. It hydrates recent history, streams new
 frames over SSE, and reconnects with capped backoff; on mobile it shows one visualization
 at a time.
+
+## Visual design system
+
+SafeFlux is designed as an **industrial control room**, not a SaaS dashboard: near-black
+graphite surfaces, thin technical borders, restrained radii, one electric-cyan accent for
+live state, a violet secondary for the AI layer, and safety colours that are reserved
+strictly for meaning.
+
+- **Tokens** live in `frontend/src/index.css` (`void / graphite / panel / surface / edge`,
+  `accent`, `ai`, `safe / warn / crit`) together with the shared utilities `grid-bg`,
+  `panel`, `panel-inset`, `stat-num` (mono, tabular numerals for every measurement) and
+  `glow-accent` / `glow-crit` (used only on the one live element that matters in a view).
+- **Primitives** — `Panel`, `InstrumentTile`, `Gauge`, `StatusBadge`, `StatePanel`, `TabBar` —
+  are the only way a page composes surfaces, so a status chip, an error and a chart marker
+  use the same red.
+- **Semantic colour rule:** `safe` (green), `warn` (amber) and `crit` (red) always mean
+  safety verdicts — reached through tokens, never raw hue ramps — and every critical state
+  also carries an icon and a word, so colour is never the only signal.
+- **Motion** is planned by pure, unit-tested modules (`src/animation/motion.ts`,
+  `failureSequence.ts`, `agentStages.ts`, `routeTransitionPlan.ts`) and applied with GSAP
+  inside a `gsap.context()` that is reverted on unmount. Page transitions stay inside
+  200–500 ms. `prefers-reduced-motion` disables flow, rotor, pulse, reveal and transitions.
+- **3D** is one lightweight Three.js digital twin on the landing hero
+  (`src/three/reactorTwin.ts`, lazy-loaded by `src/components/TwinCanvas.tsx`). It renders
+  only while visible, degrades to a static SVG schematic without WebGL, and disposes every
+  GPU resource on unmount. No other screen pays for it.
+- **One-viewport rule** applies to every authenticated page at every tested height
+  (1920×1080, 1600×900, 1440×900, 1366×768, 1280×720, 1024×768, 375×812); long content
+  becomes tabs, pagination or a bounded internal scroll region — never a clipped panel.
 
 ## Engineering interface (Part 6)
 

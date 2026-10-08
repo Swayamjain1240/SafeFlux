@@ -104,7 +104,7 @@ Core stack:
 - React Flow
 - Recharts
 - GSAP
-- optional Three.js
+- Three.js (landing hero only, dynamically imported)
 
 Public routes:
 
@@ -172,6 +172,36 @@ a *plan*, never a verdict.
 Part 8 adds **no frontend module**. The investigation API is implemented and tested
 server-side, and `/analysis/:id/live` still renders its placeholder — the live investigation
 UX belongs to Part 9. Nothing in Part 8 is claimed as a UI feature.
+
+### Visual-transformation modules (implemented, 2026-10-08)
+
+```text
+src/index.css                     design tokens + utilities (panel, panel-inset, stat-num, grid-bg, glow-*)
+src/components/ui/Panel.tsx       standard instrument panel (title, hint, actions, internal scroll)
+src/components/ui/Instrument.tsx  InstrumentTile + radial Gauge (mono numerals, limit tick, sparkline, rail)
+src/components/ui/StatusBadge.tsx semantic safety chip (label always present — colour is never the only signal)
+src/components/ui/Icons.tsx       one inline icon set (no icon dependency)
+src/components/auth/AuthShell.tsx shared dark split shell for login/signup (+ decorative signal sweep)
+src/components/TwinCanvas.tsx     lazy Three.js host: idle-load, intersection/visibility gating, dispose
+src/three/reactorTwin.ts          stylized reactor skid scene + status mapping (normal/warning/critical)
+src/animation/failureSequence.ts  pure ordering of the engine's recorded findings (unit-tested)
+src/animation/agentStages.ts      pure mapping of recorded pipeline events to the stage rail (unit-tested)
+src/animation/routeTransitionPlan.ts pure decision of which navigations may animate (unit-tested)
+```
+
+Rules this layer obeys:
+
+- **One surface language.** Pages compose `Panel` / `InstrumentTile` / `Gauge` / `TabBar`;
+  raw `slate-800`-style surfaces do not appear in new work, and safety colour comes from the
+  `safe` / `warn` / `crit` tokens only.
+- **Motion is planned, never improvised.** Each animation has a pure planner that returns
+  what may move (or nothing under reduced motion) and is unit-tested; the React hook applies
+  it inside `gsap.context()` and reverts on unmount.
+- **The 3D twin carries no data.** It illustrates the process *shape* (feed → pump → reactor →
+  outlet) and mirrors only the existing health probe; every number in the product still comes
+  from the backend.
+- **Nothing new is loaded globally.** `three` is reached through `import()` from the landing
+  hero after first paint, so no authenticated route pays for it.
 
 The dashboard picks a plant, polls `telemetry/current` (5s), and shows the safety state,
 seven metrics (temperature, pressure, feed flow, level, cooling, valve, pump), recent
@@ -254,8 +284,20 @@ warning pulse yoyos, and the pump rotor stays `transform: none` while the pump i
 The pipeline is deliberately static when no telemetry exists — a flowing line would claim
 data that is not there.
 
-Three.js is optional — it was **not** installed, because a Three.js scene would not add
-genuine value to a 2D P&ID-style diagram.
+**Visual transformation (2026-10-08).** The design-system shell, dashboard, live monitor,
+analysis creation, live investigation, failure detail, root cause, safeguards, re-verify,
+history and report screens were re-laid-out on the instrument language above, and motion was
+extended with three further planned behaviours: the recorded-sequence reveal on evidence
+screens (staggered, inline-styled, killed with its styles on unmount), the stage rail driven
+by the engine's own events, and 200–500 ms page transitions that reduced motion removes.
+
+**Three.js (2026-10-08).** Earlier revisions judged a 3D scene unnecessary next to a 2D
+P&ID diagram, and that judgement held for the workspace. It now exists in exactly one place —
+the landing hero — because the marketing surface benefits from a process visual, and it is
+engineered as a guest: dynamic `import()` after first paint, animation loop bound to
+intersection + tab visibility, simplified geometry under 560 px, a single static frame under
+`prefers-reduced-motion`, a static SVG schematic when WebGL is missing, and a `dispose()` that
+releases every geometry, material and the renderer. No workspace page renders 3D.
 
 ---
 
@@ -967,15 +1009,17 @@ history scoping). Backend total: **326 passing**.
 ## 25. Testing
 
 Frontend unit tests (Part 6) cover the pure modules under the Node test runner
-(`frontend/tests/*.test.ts`, run with `npm run test:unit`, 65 tests): viewport classification
-(desktop, short laptop, tablet, mobile, degenerate sizes), graph-orientation choice
-(including that a rotated line really does render larger than the squashed one), dashboard
-view-state derivation (loading/offline/session-expired/error/empty/ready and tone/motion
-outputs), API failure classification, the motion plan (including reduced-motion → fully
-static), the telemetry stream state machine, and (Part 7) the search planning mirror:
-allowlist mirror, per-mode axis counts, preset filtering by server capabilities, request
-building, optional-budget forwarding, every rejection the UI must explain, NaN-free parsing,
-failure filtering and clamped pagination.
+(`frontend/tests/*.test.ts`, run with `npm run test:unit`, **87 tests**): viewport
+classification (desktop, short laptop, tablet, mobile, degenerate sizes), graph-orientation
+choice (including that a rotated line really does render larger than the squashed one),
+dashboard view-state derivation (loading/offline/session-expired/error/empty/ready and
+tone/motion outputs), API failure classification, the motion plan (including
+reduced-motion → fully static), the telemetry stream state machine, (Part 7) the search
+planning mirror — allowlist mirror, per-mode axis counts, preset filtering by server
+capabilities, request building, optional-budget forwarding, every rejection the UI must
+explain, NaN-free parsing, failure filtering and clamped pagination — and (visual
+transformation) the recorded-sequence ordering, the agent stage rail derived from recorded
+events, the route-transition plan, the auth session cache and the safeguards time axis.
 
 Backend tests (`Backend/tests`, 288 passing) cover the Part 7 engine
 (`test_search.py`: deterministic linspaces, safe-end-first traversal, bisection only when

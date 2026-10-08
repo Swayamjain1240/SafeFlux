@@ -4,7 +4,92 @@
 
 ---
 
-# Current Checkpoint — 2026-10-07 · PART 9 IMPLEMENTED, END-TO-END WORKFLOW COMPLETE
+# Current Checkpoint — 2026-10-08 · VISUAL TRANSFORMATION COMPLETE (UI REDESIGN)
+
+**Status:** 🟢 The product was not rebuilt — it was re-skinned, re-laid-out and given motion
+without touching a single backend contract. Frontend builds green, `npm run lint` clean,
+87 frontend unit tests passing, backend suite still passing (326 tests, exit 0). The whole
+engineer workflow was re-walked in the browser after the redesign: signup/login, plant,
+dashboard, monitor (real SSE run), analysis creation (real `POST /analyses/run` →
+`status=complete`, 9 recorded events), failure detail, root cause, safeguards, re-verify,
+history, report.
+**Project:** SafeFlux — Autonomous Process-Safety Hunter
+**Track:** Best Apps & Agents
+
+## What the visual transformation changed
+
+### Design system (commit `783b010`)
+
+Dark-first instrument language in `src/index.css`: near-black surface stack
+(`--color-void/graphite/panel/surface/surface-2/surface-3`), thin technical borders
+(`edge`, `edge-strong`), one electric-cyan accent (`--color-accent #00d9ff`) with a violet
+secondary reserved for the AI layer, and safety colours that mean exactly one thing
+(`--color-safe/warn/crit`). Utilities `grid-bg`, `panel`, `panel-inset`, `stat-num`
+(mono tabular numerals), `glow-accent`, `glow-crit`. Radii stay restrained (6–10 px). The
+React Flow attribution is quietened but always legible.
+
+### Shell, pages, motion, 3D
+
+| Work | Commit |
+| --- | --- |
+| Control-room shell: top status header + labelled sidebar rail + system block | `5b2cd86` |
+| Dashboard as a command centre (status row, graph, instruments, findings) | `e321355` |
+| Live monitor: process & safety panel, instrument tiles, per-series chart tabs with limit/violation markers | `4a1111d` |
+| Analysis creation ("What changed?") + live investigation stage rail from recorded events | `1194bb3` |
+| Evidence screens: failure detail, root cause, safeguards on one time axis, split re-verify, history, report tabs — with the recorded-sequence reveal | `b3cea08` |
+| Landing digital twin (Three.js) + premium auth surfaces + plant wizard on tokens | `a07c8ff` |
+| Status colour unified on `safe/warn/crit`; React Flow attribution restored | `7338fb3` |
+
+### Three.js (the only new runtime dependency)
+
+`src/three/reactorTwin.ts` builds a stylized reactor skid (tank → pump → vessel with cooling
+coils, pressure ring, outlet, status beacon). `src/components/TwinCanvas.tsx` loads it through
+a dynamic `import()` **after first paint**, starts the loop only while the canvas intersects
+the viewport and the tab is visible, simplifies geometry below 560 px, gives
+`prefers-reduced-motion` a single static frame, and disposes every geometry/material/renderer
+on unmount. WebGL unavailable → a labelled static SVG schematic, never a fake animation. The
+twin is decoration of the *process shape* only; it carries no numbers and mirrors just the
+health probe the page already displays.
+
+### Motion
+
+GSAP remains the only animation library. Pure, unit-tested planners decide what may move
+(`motion.ts`, `failureSequence.ts`, `agentStages.ts`, `routeTransitionPlan.ts`); hooks apply
+them inside `gsap.context()` and revert on unmount. `prefers-reduced-motion` collapses the
+plans to static — no flow, rotor, pulse, reveal or page transition. Page transitions stay
+200–500 ms and never delay navigation.
+
+## Verification recorded for this checkpoint
+
+- `npm run build` (tsc -b + vite) green; `npm run lint` 0 warnings / 0 errors; `npm run
+test:unit` 87/87; backend `pytest` exit 0 with no failures.
+- One-viewport audit in the real browser: `/dashboard`, `/plant`, `/monitor`, `/analysis/new`,
+  `/analysis/:id/live`, `/investigation`, `/safeguards`, `/reverify`, `/history`,
+  `/reports/:id`, `/failures/:id` all report `document.scrollHeight <= innerHeight` at
+  1366×768, 1280×720, 1024×768 and 375×812; 1600×900, 1440×900 and 1920×1080 checked on the
+  densest screens. Login and signup keep their whole form inside one viewport at 1280×720.
+- Console clean on every visited route (one deprecated `THREE.Clock` warning and the React
+  Flow attribution warning were fixed, not silenced).
+- Backend/business logic untouched: no route, schema, simulator equation, safety rule or
+  auth contract changed anywhere in this work.
+
+## Honest limitations of this checkpoint
+
+- Screenshots could not be captured in this environment (the preview webview reported no
+  compositing frames), so layout claims rest on DOM measurements and accessibility-tree
+  snapshots rather than images.
+- Reduced motion is verified by unit tests over the planners and by code inspection
+  (one-frame render, static plans); it was not emulated in the browser session.
+- `src/search/SearchControls.tsx` and `src/search/SearchResults.tsx` still carry the
+  pre-redesign styling. They are **not imported by any route** (the Part-9 workspace renders
+  its own search context, and the server drives the bounded search), so they are unreachable
+  dead mirror code. They were left in place because deleting documented Part-7 modules is an
+  architecture decision, not a visual one; `src/pages/ComingSoon.tsx` was deleted, since the
+  Part-9 `/plant` route replaced it and nothing referenced it.
+
+---
+
+# Checkpoint — 2026-10-07 · PART 9 IMPLEMENTED, END-TO-END WORKFLOW COMPLETE
 
 **Status:** 🟢 Part 9 (autonomous analysis, safeguard and re-verification UX) implemented and
 test-verified: backend 326 tests passing (31 new), frontend builds with lint/typecheck green
