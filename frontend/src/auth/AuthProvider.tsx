@@ -3,14 +3,8 @@ import { type ReactNode, useCallback, useEffect, useMemo } from 'react'
 import { apiGet, apiPost } from '../api/client'
 import { onSessionExpired } from '../api/sessionEvents'
 import { clearAssessment } from '../analysis/assessmentStore'
-import {
-  AuthContext,
-  type AuthStatus,
-  type SessionResponse,
-  type SessionUser,
-} from './context'
-
-const SESSION_KEY = ['auth', 'session'] as const
+import { AuthContext, type SessionResponse, type SessionUser } from './context'
+import { SESSION_KEY, deriveAuthStatus, dropSession, type SessionData } from './session'
 
 /**
  * Authentication state for the app shell.
@@ -23,7 +17,7 @@ const SESSION_KEY = ['auth', 'session'] as const
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
 
-  const session = useQuery<SessionResponse>({
+  const session = useQuery<SessionData>({
     queryKey: SESSION_KEY,
     queryFn: () => apiGet<SessionResponse>('/auth/session'),
     retry: false,
@@ -35,19 +29,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // The backend is the authority: a 401 on any protected call drops our local
   // session copy, which lets ProtectedRoute bounce the user to /login.
-  useEffect(
-    () =>
-      onSessionExpired(() => {
-        queryClient.removeQueries({ queryKey: SESSION_KEY })
-      }),
-    [queryClient],
-  )
+  useEffect(() => onSessionExpired(() => dropSession(queryClient)), [queryClient])
 
-  const status: AuthStatus = session.isPending
-    ? 'loading'
-    : session.isSuccess && session.data
-      ? 'authenticated'
-      : 'unauthenticated'
+  const status = deriveAuthStatus(session)
 
   const signIn = useCallback(
     async (email: string, password: string) => {
@@ -72,7 +56,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Clearing local state is always safe: the cookie is HttpOnly and the
       // server clears it on logout; even a network error must not keep us signed in.
     } finally {
-      queryClient.removeQueries({ queryKey: SESSION_KEY })
+      // setQueryData(null), not removeQueries: an active observer must be
+      // handed a value or the shell stays mounted (see auth/session.ts).
+      dropSession(queryClient)
       clearAssessment()
     }
   }, [queryClient])
