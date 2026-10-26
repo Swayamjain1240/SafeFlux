@@ -98,28 +98,6 @@ set or relax a limit, decide a verdict, run code, read a secret or touch equipme
 **Platform**
 - FastAPI + Pydantic v2, Argon2id passwords, HttpOnly session cookie, ownership-scoped access (cross-user → `404`), strict CORS, security headers, per-IP and per-user rate limits, request body-size guard, hard compute budgets.
 
-## Status
-
-Build **Part 9 of 10** is implemented and test-verified end to end.
-
-| Area | State |
-| --- | --- |
-| FastAPI bootstrap, `/api/v1`, env validation, error envelopes, headers, CORS, rate limits | ✅ |
-| Auth: signup / login / logout / session, Argon2id + HttpOnly cookie, ownership foundation | ✅ |
-| Plant domain, owned CRUD, 5-step one-viewport wizard + React Flow topology preview | ✅ |
-| Deterministic simulator, fault injection, hard compute budgets | ✅ |
-| Safety engine + safeguard timing + live SSE telemetry + one-viewport monitor | ✅ |
-| Engineering dashboard on real backend data (no fixtures) | ✅ |
-| Deterministic scenario search (sweep / sensitivity / combinations) + search workspace | ✅ |
-| AI investigation agent: allowlisted tools, bounded loop, budgets, injection defence | ✅ |
-| Autonomous analyses: run / events / failures / counterfactuals / safeguards / re-verify / report / PDF | ✅ |
-| Dark control-room design system, GSAP motion, Three.js hero twin, code-split routes | ✅ |
-| Backend test suite (pytest) | ✅ 326 passing |
-| Frontend unit tests (`node --test`) | ✅ 87 passing |
-| Hardening + security / one-viewport / dependency audit (QA Parts 1–2) | ✅ approved with warnings |
-| Hosted deployment | ⏳ no hosted environment yet; production config validated |
-| One controlled real Nebius/NVIDIA inference | ⏳ needs `NEBIUS_API_KEY` |
-
 ## Tech stack
 
 | Layer | Technology |
